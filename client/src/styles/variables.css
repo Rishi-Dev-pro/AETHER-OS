@@ -1,0 +1,43 @@
+:root {
+  /* ===========================
+     COLORS (Premium Dark Theme)
+  =========================== */
+  --bg-primary: #030407;
+  --bg-secondary: #07090f;
+  --bg-panel: rgba(10, 12, 20, 0.72);
+  
+  /* Primary Cyan Accent (Used strictly for status highlight) */
+  --cyan: #00e5ff;
+  --blue: #3b82f6;
+  --purple: #8b5cf6;
+  
+  /* Indicators */
+  --neon-cyan: #00e5ff;
+  --neon-pink: #f43f5e;
+  --neon-green: #10b981;
+  --neon-yellow: #f59e0b;
+
+  --text-primary: #f8fafc;
+  --text-secondary: #94a3b8;
+  --text-dim: #475569;
+  
+  /* Ultra-thin neutral borders instead of glowing cyan */
+  --border: rgba(255, 255, 255, 0.06);
+  --border-active: rgba(0, 229, 255, 0.25);
+  --border-warning: rgba(244, 63, 94, 0.25);
+
+  /* ===========================
+     GLOW (Highly Restrained)
+  =========================== */
+  --glow-small: 0 0 12px rgba(0, 229, 255, 0.08);
+  --glow-medium: 0 0 20px rgba(0, 229, 255, 0.12);
+  --glow-large: 0 0 40px rgba(0, 229, 255, 0.15);
+  
+  --glow-pink: 0 0 15px rgba(244, 63, 94, 0.12);
+  --shadow-glass: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
+
+  /* ===========================
+     RADIUS
+  =========================== */
+  --radius: 16px;
+}

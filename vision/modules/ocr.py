@@ -1,0 +1,2 @@
+﻿# AETHER OS - ocr module
+
