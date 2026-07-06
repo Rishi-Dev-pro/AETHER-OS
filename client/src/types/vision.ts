@@ -1,3 +1,9 @@
+export interface FaceLandmark {
+  x: number;
+  y: number;
+  z: number;
+}
+
 export interface VisionFace {
   id: string | number;
   confidence: number;
@@ -8,6 +14,23 @@ export interface VisionFace {
     h: number;
   };
   emotions?: string[];
+  landmarks?: FaceLandmark[];
+  eyes?: {
+    leftOpen: boolean;
+    rightOpen: boolean;
+  };
+  blink?: boolean;
+  mouth?: {
+    open: boolean;
+    ratio: number;
+  };
+  smile?: number;
+  head?: {
+    yaw: number;
+    pitch: number;
+    roll: number;
+  };
+  looking?: "left" | "right" | "center" | "up" | "down" | string;
 }
 
 export interface VisionHand {
@@ -66,4 +89,10 @@ export interface VisionPayload {
 
   status: string;
   warnings?: string[];
+  metrics?: {
+    cameraFps: number;
+    detectionFps: number;
+    streamingFps: number;
+    avgDetectionTime: number;
+  };
 }

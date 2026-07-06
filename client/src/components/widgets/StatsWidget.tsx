@@ -2,7 +2,9 @@ import { useSystemStore } from "../../store/systemStore";
 import { useEffect, useState } from "react";
 
 export default function StatsWidget() {
-  const { cpu, latency, memory } = useSystemStore();
+  const cpu = useSystemStore((state) => state.cpu);
+  const latency = useSystemStore((state) => state.latency);
+  const memory = useSystemStore((state) => state.memory);
   const [fps, setFps] = useState(60);
 
   // Measure dynamic FPS locally

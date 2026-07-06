@@ -1,7 +1,52 @@
-import { useVisionStore } from "../../store/visionStore";
+import { useVisionStore, type FrameProfile } from "../../store/visionStore";
+import { useMemo } from "react";
 
 export default function VisionWidget() {
-  const { cameraStatus, faceCount, handCount, objectCount, emotionStatus } = useVisionStore();
+  const cameraStatus = useVisionStore((state) => state?.cameraStatus ?? false);
+  const faceCount = useVisionStore((state) => state?.faceCount ?? 0);
+  const handCount = useVisionStore((state) => state?.handCount ?? 0);
+  const objectCount = useVisionStore((state) => state?.objectCount ?? 0);
+  const emotionStatus = useVisionStore((state) => state?.emotionStatus ?? "None");
+  const activeFaces = useVisionStore((state) => state?.activeFaces ?? []);
+
+  const profileQueue = useVisionStore((state) => state?.profileQueue ?? []);
+
+  const stats = useMemo(() => {
+    if (!profileQueue || profileQueue.length === 0) return null;
+
+    const computedStats: any = {};
+    const keys: Array<keyof FrameProfile> = [
+      "tCameraCapture", "tFaceDetect", "tFaceMesh", "tFaceIntel",
+      "tJpegEncode", "tBase64Encode", "tPythonWrite", "tNodeReceive",
+      "tJsonParse", "tNodeEmit", "tBrowserReceive", "tImageDecode",
+      "tReactRender", "tOverlayRender", "tEndToEnd"
+    ];
+
+    keys.forEach((key) => {
+      const values = profileQueue.map((p) => p?.[key]).filter((v) => v !== undefined && v !== null && !isNaN(v));
+      if (values.length === 0) {
+        computedStats[key] = { avg: 0, min: 0, max: 0 };
+        return;
+      }
+      const sum = values.reduce((a, b) => a + b, 0);
+      computedStats[key] = {
+        avg: sum / values.length,
+        min: Math.min(...values),
+        max: Math.max(...values)
+      };
+    });
+
+    return computedStats;
+  }, [profileQueue]);
+
+  const primaryFace = cameraStatus && activeFaces && activeFaces.length > 0 ? activeFaces[0] : null;
+
+  const blinkVal = primaryFace && primaryFace.blink !== undefined ? (primaryFace.blink ? "BLINKING" : "NO") : "--";
+  const eyesVal = primaryFace && primaryFace.eyes ? `L:${primaryFace.eyes.leftOpen ? "OPEN" : "CLSD"} R:${primaryFace.eyes.rightOpen ? "OPEN" : "CLSD"}` : "--";
+  const mouthVal = primaryFace && primaryFace.mouth ? `${primaryFace.mouth.open ? "OPEN" : "CLSD"} (${primaryFace.mouth.ratio.toFixed(2)})` : "--";
+  const smileVal = primaryFace && primaryFace.smile !== undefined ? `${Math.round(primaryFace.smile * 100)}%` : "--";
+  const lookingVal = primaryFace && primaryFace.looking ? primaryFace.looking.toUpperCase() : "--";
+  const headVal = primaryFace && primaryFace.head ? `Y:${primaryFace.head.yaw}° P:${primaryFace.head.pitch}° R:${primaryFace.head.roll}°` : "--";
 
   return (
     <div
@@ -52,7 +97,116 @@ export default function VisionWidget() {
           active={cameraStatus && emotionStatus !== "None"}
           isText
         />
+        
+        {cameraStatus && (
+          <>
+            <div className="border-t border-white/[0.04] my-2 pt-2" />
+            <VisionRow
+              label="Blink Status"
+              value={blinkVal}
+              active={primaryFace?.blink === true}
+              isText
+            />
+            <VisionRow
+              label="Eye Status"
+              value={eyesVal}
+              active={primaryFace !== null}
+              isText
+            />
+            <VisionRow
+              label="Mouth Status"
+              value={mouthVal}
+              active={primaryFace !== null}
+              isText
+            />
+            <VisionRow
+              label="Smile Score"
+              value={smileVal}
+              active={primaryFace !== null && (primaryFace.smile ?? 0) > 0.3}
+              isText
+            />
+            <VisionRow
+              label="Looking Direction"
+              value={lookingVal}
+              active={primaryFace !== null && primaryFace.looking !== "center"}
+              isText
+            />
+            <VisionRow
+              label="Head Rotation"
+              value={headVal}
+              active={primaryFace !== null}
+              isText
+            />
+          </>
+        )}
+
+        <div className="border-t border-white/[0.04] my-2 pt-2" />
+        <div className="flex items-center justify-between mb-1.5 select-none">
+          <span className="text-[8px] font-semibold text-slate-500 uppercase tracking-widest text-left">
+            Pipeline Profiler
+          </span>
+          <span className="text-[8px] font-mono text-slate-400">
+            ({useVisionStore((s) => s.profileQueue.length)}/100F)
+          </span>
+        </div>
+
+        {cameraStatus ? (
+          <div className="space-y-1 text-[9px] font-mono pr-1">
+            <ProfileRow label="1. Camera Capture" stats={stats?.tCameraCapture} />
+            <ProfileRow label="2. Face Detection" stats={stats?.tFaceDetect} />
+            <ProfileRow label="3. Face Mesh" stats={stats?.tFaceMesh} />
+            <ProfileRow label="4. Face Intel" stats={stats?.tFaceIntel} />
+            <ProfileRow label="5. JPEG Encode" stats={stats?.tJpegEncode} />
+            <ProfileRow label="6. Base64 Encode" stats={stats?.tBase64Encode} />
+            <ProfileRow label="7. Python Write" stats={stats?.tPythonWrite} />
+            <ProfileRow label="8. Node Receive (IPC)" stats={stats?.tNodeReceive} />
+            <ProfileRow label="9. JSON Parse" stats={stats?.tJsonParse} />
+            <ProfileRow label="10. Socket.IO Emit" stats={stats?.tNodeEmit} />
+            <ProfileRow label="11. Browser Receive" stats={stats?.tBrowserReceive} />
+            <ProfileRow label="12. Image Decode" stats={stats?.tImageDecode} />
+            <ProfileRow label="13. React Render" stats={stats?.tReactRender} />
+            <ProfileRow label="14. Overlay Render" stats={stats?.tOverlayRender} />
+            <div className="border-t border-white/[0.04] my-1.5 pt-1.5" />
+            <ProfileRow label="15. End-to-End Frame" stats={stats?.tEndToEnd} isTotal />
+          </div>
+        ) : (
+          <div className="text-[9px] font-sans text-slate-500 text-center py-4 bg-white/[0.01] rounded-xl border border-white/[0.02]">
+            Waiting for camera feed...
+          </div>
+        )}
       </div>
+    </div>
+  );
+}
+
+function ProfileRow({
+  label,
+  stats,
+  isTotal = false,
+}: {
+  label: string;
+  stats?: { avg: number; min: number; max: number };
+  isTotal?: boolean;
+}) {
+  const hasData = stats && typeof stats.avg === "number" && typeof stats.min === "number" && typeof stats.max === "number";
+  const avg = hasData ? stats.avg.toFixed(1) : "--";
+  const min = hasData ? stats.min.toFixed(1) : "--";
+  const max = hasData ? stats.max.toFixed(1) : "--";
+
+  return (
+    <div className={`flex items-center justify-between py-1 px-1.5 rounded hover:bg-white/[0.02] transition-colors gap-2 ${isTotal ? 'bg-cyan-500/10 border border-cyan-500/20 font-bold' : ''}`}>
+      <span className={`${isTotal ? 'text-cyan-400 font-sans' : 'text-slate-400 font-sans'} truncate flex-1 text-left`}>
+        {label}
+      </span>
+      <span className={`${isTotal ? 'text-cyan-400' : 'text-slate-300'} font-mono shrink-0`}>
+        {hasData ? (
+          <>
+            {avg} <span className="text-slate-500 text-[8px]">({min}-{max})</span>
+          </>
+        ) : (
+          "--"
+        )}
+      </span>
     </div>
   );
 }

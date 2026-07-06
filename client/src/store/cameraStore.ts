@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import type { FaceLandmark } from "../types/vision";
 
 export interface TargetBox {
   id: string;
@@ -8,6 +9,11 @@ export interface TargetBox {
   w: number;
   h: number;
   confidence: number;
+}
+
+export interface FaceLandmarkEntry {
+  id: string;
+  landmarks: FaceLandmark[];
 }
 
 interface CameraState {
@@ -20,6 +26,7 @@ interface CameraState {
     emotion: string;
   };
   targetBoxes: TargetBox[];
+  faceLandmarks: FaceLandmarkEntry[];
   
   // Frame streaming states
   frame: string | null;
@@ -33,6 +40,7 @@ interface CameraState {
   setCameraStatus: (status: "OFFLINE" | "READY" | "ACTIVE") => void;
   updateDetectedItems: (items: Partial<CameraState["detectedItems"]>) => void;
   setTargetBoxes: (boxes: TargetBox[]) => void;
+  setFaceLandmarks: (landmarks: FaceLandmarkEntry[]) => void;
   updateCameraFeed: (
     frame: string | null,
     cameraConnected: boolean,
@@ -53,6 +61,7 @@ export const useCameraStore = create<CameraState>((set) => ({
     emotion: "None",
   },
   targetBoxes: [],
+  faceLandmarks: [],
   
   // Initial frame states
   frame: null,
@@ -80,6 +89,7 @@ export const useCameraStore = create<CameraState>((set) => ({
       detectedItems: { ...state.detectedItems, ...items },
     })),
   setTargetBoxes: (boxes) => set({ targetBoxes: boxes }),
+  setFaceLandmarks: (landmarks) => set({ faceLandmarks: landmarks }),
   updateCameraFeed: (frame, cameraConnected, fps, width, height) =>
     set(() => ({
       frame,
@@ -103,6 +113,7 @@ export const useCameraStore = create<CameraState>((set) => ({
       lastFrameTime: null,
       cameraStatus: "READY",
       targetBoxes: [],
+      faceLandmarks: [],
       detectedItems: {
         faces: 0,
         hands: 0,

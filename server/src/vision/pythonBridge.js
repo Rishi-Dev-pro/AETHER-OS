@@ -6,6 +6,7 @@ import { detectionManager } from "./detectionManager.js";
 import readline from "readline";
 import path from "path";
 import { fileURLToPath } from "url";
+import { performance } from "perf_hooks";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const defaultScriptPath = path.resolve(__dirname, "../../../vision/main.py");
@@ -18,11 +19,16 @@ class PythonBridge {
     this._onCrash = null;
     this._rl = null;
     this._stopPromise = null;
+    this.lastEmitTime = 0;
+    
+    // Throttling and drop tracking variables
+    this.latestLine = null;
+    this.isProcessing = false;
+    this.droppedFramesCount = 0;
   }
 
   /**
    * Returns true if the Python vision subprocess is currently running
-   * (including if it's in the process of stopping).
    */
   isRunning() {
     return this.pythonProcess !== null;
@@ -37,9 +43,6 @@ class PythonBridge {
 
   /**
    * Starts the Python Vision Engine subprocess.
-   * @param {Object} options
-   * @param {string} options.scriptPath - Path to the Python script.
-   * @param {Function} options.onCrash - Callback invoked if Python exits unexpectedly.
    */
   async start({ scriptPath = defaultScriptPath, onCrash = null } = {}) {
     if (env.nodeEnv === "test") {
@@ -65,7 +68,7 @@ class PythonBridge {
     logger.info(`Starting Python vision subprocess: python ${scriptPath}`);
     
     try {
-      this.pythonProcess = spawn("python", [scriptPath], {
+      this.pythonProcess = spawn("python", ["-u", scriptPath], {
         stdio: ["pipe", "pipe", "pipe"],
       });
       logger.success("✓ Python Started");
@@ -75,33 +78,32 @@ class PythonBridge {
         terminal: false
       });
 
+      this.latestLine = null;
+      this.isProcessing = false;
+      this.droppedFramesCount = 0;
+
       this._rl.on("line", (line) => {
-        // Don't broadcast if we're stopping
         if (this.isStopping) return;
 
         const trimmed = line.trim();
         if (!trimmed) return;
 
         if (trimmed.startsWith("{")) {
-          try {
-            const data = JSON.parse(trimmed);
-            const payload = data.payload;
-            const frame = data.frame;
-
-            const validation = validateVisionPayload(payload);
-            
-            if (validation.isValid) {
-              logger.info("✓ Payload Received");
-              detectionManager.handlePayload({ frame, payload });
-            } else {
-              logger.warn(`Invalid Python payload: ${validation.errors.join(", ")}`);
-            }
-          } catch (error) {
-            // Ignore invalid JSON safely (never crash)
-            logger.warn(`Failed to parse Python line as JSON: ${error.message}`);
+          this.latestLine = trimmed;
+          if (!this.isProcessing) {
+            this.isProcessing = true;
+            setImmediate(() => {
+              const lineToProcess = this.latestLine;
+              this.latestLine = null;
+              this.isProcessing = false;
+              if (lineToProcess) {
+                this.processLine(lineToProcess);
+              }
+            });
+          } else {
+            this.droppedFramesCount++;
           }
         } else {
-          // Log non-JSON standard print statements
           logger.info(`[Python stdout]: ${trimmed}`);
         }
       });
@@ -116,7 +118,6 @@ class PythonBridge {
         this._cleanup();
 
         if (!wasStopping) {
-          // Unexpected crash — notify via callback, do NOT auto-restart
           logger.error("✓ Python Crashed Unexpectedly");
           if (typeof this._onCrash === "function") {
             this._onCrash(code);
@@ -147,9 +148,7 @@ class PythonBridge {
   }
 
   /**
-   * Stops the Python Vision Engine gracefully.
-   * Writes STOP to stdin first, then falls back to kill after a timeout.
-   * Returns a Promise that resolves when the process has fully exited.
+   * Stops the Python Vision Engine gracefully by killing the process.
    */
   stop() {
     if (!this.pythonProcess) {
@@ -168,7 +167,6 @@ class PythonBridge {
     const proc = this.pythonProcess;
 
     this._stopPromise = new Promise((resolve) => {
-      // Send STOP command via stdin (cross-platform graceful shutdown)
       try {
         if (proc.stdin && !proc.stdin.destroyed) {
           proc.stdin.write("STOP\n");
@@ -178,21 +176,19 @@ class PythonBridge {
         logger.warn(`Could not write STOP to stdin: ${err.message}`);
       }
 
-      // Fallback: force kill after 3 seconds if Python hasn't exited
       const killTimer = setTimeout(() => {
         if (this.pythonProcess && this.pythonProcess === proc) {
           logger.warn("Python did not exit in time, force killing...");
           try {
             proc.kill("SIGKILL");
           } catch (e) {
-            // Process may have already exited
+            // ignore
           }
           this._cleanup();
           resolve();
         }
       }, 3000);
 
-      // If process exits before the timeout, clear the timer and resolve
       proc.once("close", () => {
         clearTimeout(killTimer);
         resolve();
@@ -204,9 +200,49 @@ class PythonBridge {
     return this._stopPromise;
   }
 
-  /**
-   * Cleans up all references after Python process exits.
-   */
+  processLine(line) {
+    const tNodeReceive = Date.now();
+    try {
+      const startParse = performance.now();
+      const data = JSON.parse(line);
+      const tJsonParse = performance.now() - startParse;
+
+      const payload = data.payload;
+      const frame = data.frame;
+      const profile = data.profile || {};
+
+      // Pipeline Age Throttling (Drop stale frames older than 100ms before broadcasting)
+      if (profile.tPythonStart) {
+        const age = tNodeReceive - profile.tPythonStart;
+        if (age > 100) {
+          this.droppedFramesCount++;
+          logger.warn(`✓ Frame Dropped in Node (Stale: ${age}ms)`);
+          return;
+        }
+      }
+
+      const validation = validateVisionPayload(payload);
+      
+      if (validation.isValid) {
+        logger.info("✓ Payload Received");
+        
+        profile.tNodeReceive = tNodeReceive;
+        profile.tJsonParse = tJsonParse;
+        profile.tNodeEmitTimestamp = Date.now();
+        profile.tNodeEmit = this.lastEmitTime;
+        profile.droppedFramesNode = this.droppedFramesCount;
+
+        const startEmit = performance.now();
+        detectionManager.handlePayload({ frame, payload, profile });
+        this.lastEmitTime = performance.now() - startEmit;
+      } else {
+        logger.warn(`Invalid Python payload: ${validation.errors.join(", ")}`);
+      }
+    } catch (error) {
+      logger.warn(`Failed to parse Python line as JSON: ${error.message}`);
+    }
+  }
+
   _cleanup() {
     if (this._rl) {
       try { this._rl.close(); } catch (e) { /* ignore */ }
@@ -214,6 +250,9 @@ class PythonBridge {
     }
     this.pythonProcess = null;
     this.isStopping = false;
+    this.latestLine = null;
+    this.isProcessing = false;
+    this.droppedFramesCount = 0;
   }
 
   sendFrame(frameBuffer) {

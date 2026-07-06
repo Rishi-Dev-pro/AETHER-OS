@@ -68,8 +68,9 @@ function StatusRow({
 }
 
 export default function SystemWidget() {
-  const { voiceStatus } = useVoiceStore();
-  const { visionMode, cameraStatus } = useVisionStore();
+  const voiceStatus = useVoiceStore((state) => state?.voiceStatus ?? "ONLINE");
+  const visionMode = useVisionStore((state) => state?.visionMode ?? "standard");
+  const cameraStatus = useVisionStore((state) => state?.cameraStatus ?? false);
 
   return (
     <div

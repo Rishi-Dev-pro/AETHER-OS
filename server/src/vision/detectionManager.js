@@ -12,7 +12,8 @@ class DetectionManager {
       const io = getIO();
       io.emit("vision:update", {
         frame: data.frame,
-        payload: data.payload
+        payload: data.payload,
+        profile: data.profile
       });
       logger.success("✓ Payload Broadcast");
     } catch (error) {

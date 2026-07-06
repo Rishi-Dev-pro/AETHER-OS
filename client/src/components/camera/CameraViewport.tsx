@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback, useState } from "react";
+import { useEffect, useRef, useCallback, useState, memo } from "react";
 import GlowPanel from "../ui/GlowPanel";
 import ViewportHeader from "./ViewportHeader";
 import ViewportFooter from "./ViewportFooter";
@@ -16,22 +16,208 @@ import { Camera } from "lucide-react";
  * so they all share identical pixel dimensions and can use the same scaleX/scaleY
  * mapping from Python frame coordinates → displayed image coordinates.
  */
-function VisionOverlayContainer({
+const drawBoundingBoxes = (
+  ctx: CanvasRenderingContext2D,
+  targetBoxes: any[],
+  scaleX: number,
+  scaleY: number,
+  imageRect: { width: number; height: number }
+) => {
+  (targetBoxes ?? []).forEach((box) => {
+    if (!box) return;
+
+    const drawX = ((box.x ?? 0) / 100) * imageRect.width;
+    const drawY = ((box.y ?? 0) / 100) * imageRect.height;
+    const drawW = (box.w ?? 0) * scaleX;
+    const drawH = (box.h ?? 0) * scaleY;
+
+    // Draw box outline (cyan-400/50: #06b6d4)
+    ctx.strokeStyle = "rgba(6, 182, 212, 0.5)";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(drawX, drawY, drawW, drawH);
+
+    // Corner brackets (cyan-300: #67e8f9)
+    ctx.strokeStyle = "rgba(103, 232, 249, 1)";
+    ctx.lineWidth = 1.5;
+    const bracketLen = 10;
+
+    // Top-left
+    ctx.beginPath();
+    ctx.moveTo(drawX + bracketLen, drawY);
+    ctx.lineTo(drawX, drawY);
+    ctx.lineTo(drawX, drawY + bracketLen);
+    ctx.stroke();
+
+    // Top-right
+    ctx.beginPath();
+    ctx.moveTo(drawX + drawW - bracketLen, drawY);
+    ctx.lineTo(drawX + drawW, drawY);
+    ctx.lineTo(drawX + drawW, drawY + bracketLen);
+    ctx.stroke();
+
+    // Bottom-left
+    ctx.beginPath();
+    ctx.moveTo(drawX, drawY + drawH - bracketLen);
+    ctx.lineTo(drawX, drawY + drawH);
+    ctx.lineTo(drawX + bracketLen, drawY + drawH);
+    ctx.stroke();
+
+    // Bottom-right
+    ctx.beginPath();
+    ctx.moveTo(drawX + drawW - bracketLen, drawY + drawH);
+    ctx.lineTo(drawX + drawW, drawY + drawH);
+    ctx.lineTo(drawX + drawW, drawY + drawH - bracketLen);
+    ctx.stroke();
+
+    // Box Crosshair (center, length 12, opacity 15%)
+    ctx.strokeStyle = "rgba(34, 211, 238, 0.15)";
+    ctx.lineWidth = 1;
+    const cx = drawX + drawW / 2;
+    const cy = drawY + drawH / 2;
+    ctx.beginPath();
+    ctx.moveTo(cx - 6, cy);
+    ctx.lineTo(cx + 6, cy);
+    ctx.moveTo(cx, cy - 6);
+    ctx.lineTo(cx, cy + 6);
+    ctx.stroke();
+
+    // Text Label Card
+    const text = `${box.label ?? "FACE DETECTED"} ${box.confidence ?? 0}%`;
+    ctx.font = "bold 8px monospace";
+    ctx.textBaseline = "middle";
+    const textWidth = ctx.measureText(text).width;
+    const cardW = textWidth + 18;
+    const cardH = 15;
+    const cardX = drawX;
+    const cardY = drawY - 20;
+
+    // Draw background card
+    ctx.fillStyle = "rgba(0, 0, 0, 0.85)";
+    ctx.beginPath();
+    if (ctx.roundRect) {
+      ctx.roundRect(cardX, cardY, cardW, cardH, 4);
+    } else {
+      ctx.rect(cardX, cardY, cardW, cardH);
+    }
+    ctx.fill();
+
+    // Card border
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.1)";
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // Status indicator dot (red)
+    ctx.fillStyle = "rgba(239, 68, 68, 1)";
+    ctx.beginPath();
+    ctx.arc(cardX + 7, cardY + cardH / 2, 2, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Text Label
+    ctx.fillStyle = "rgba(103, 232, 249, 1)";
+    ctx.fillText(text, cardX + 14, cardY + cardH / 2 + 0.5);
+  });
+};
+
+const drawFaceMesh = (
+  ctx: CanvasRenderingContext2D,
+  faceLandmarks: any[],
+  imageRect: { width: number; height: number }
+) => {
+  if (!faceLandmarks || faceLandmarks.length === 0) return;
+
+  // Pass 1: Outer glow circles (radius 2.5, low opacity cyan)
+  ctx.fillStyle = "rgba(0, 229, 255, 0.25)";
+  ctx.beginPath();
+  faceLandmarks.forEach((entry) => {
+    if (!entry || !Array.isArray(entry.landmarks)) return;
+    entry.landmarks.forEach((lm: any) => {
+      if (!lm) return;
+      const x = (lm.x ?? 0) * imageRect.width;
+      const y = (lm.y ?? 0) * imageRect.height;
+      ctx.moveTo(x + 2.5, y);
+      ctx.arc(x, y, 2.5, 0, Math.PI * 2);
+    });
+  });
+  ctx.fill();
+
+  // Pass 2: Inner solid core circles (radius 1.25, high opacity cyan)
+  ctx.fillStyle = "rgba(0, 229, 255, 0.85)";
+  ctx.beginPath();
+  faceLandmarks.forEach((entry) => {
+    if (!entry || !Array.isArray(entry.landmarks)) return;
+    entry.landmarks.forEach((lm: any) => {
+      if (!lm) return;
+      const x = (lm.x ?? 0) * imageRect.width;
+      const y = (lm.y ?? 0) * imageRect.height;
+      ctx.moveTo(x + 1.25, y);
+      ctx.arc(x, y, 1.25, 0, Math.PI * 2);
+    });
+  });
+  ctx.fill();
+};
+
+const drawHands = (_ctx: CanvasRenderingContext2D) => {};
+const drawPose = (_ctx: CanvasRenderingContext2D) => {};
+const drawObjects = (_ctx: CanvasRenderingContext2D) => {};
+const drawOCR = (_ctx: CanvasRenderingContext2D) => {};
+
+const VisionOverlayContainer = memo(function VisionOverlayContainer({
   imageRect,
   frameWidth,
   frameHeight,
   targetBoxes,
+  faceLandmarks,
   isCameraEnabled,
 }: {
   imageRect: { width: number; height: number };
   frameWidth: number;
   frameHeight: number;
   targetBoxes: ReturnType<typeof useCameraStore.getState>["targetBoxes"];
+  faceLandmarks: ReturnType<typeof useCameraStore.getState>["faceLandmarks"];
   isCameraEnabled: boolean;
 }) {
+  const startOverlayRender = performance.now();
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
   // Coordinate mapping: Python frame pixels → displayed image pixels
   const scaleX = imageRect.width > 0 && frameWidth > 0 ? imageRect.width / frameWidth : 1;
   const scaleY = imageRect.height > 0 && frameHeight > 0 ? imageRect.height / frameHeight : 1;
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = imageRect.width * dpr;
+    canvas.height = imageRect.height * dpr;
+    canvas.style.width = `${imageRect.width}px`;
+    canvas.style.height = `${imageRect.height}px`;
+
+    ctx.clearRect(0, 0, imageRect.width, imageRect.height);
+    ctx.scale(dpr, dpr);
+
+    if (!isCameraEnabled) return;
+
+    // Draw dynamic overlay layers
+    drawBoundingBoxes(ctx, targetBoxes, scaleX, scaleY, imageRect);
+    drawFaceMesh(ctx, faceLandmarks, imageRect);
+
+    // Expose drawing placeholders for future compatibility modules
+    drawHands(ctx);
+    drawPose(ctx);
+    drawObjects(ctx);
+    drawOCR(ctx);
+  }, [targetBoxes, faceLandmarks, imageRect, scaleX, scaleY, isCameraEnabled]);
+
+  useEffect(() => {
+    if (!isCameraEnabled) return;
+    const endOverlay = performance.now();
+    const overlayRenderDuration = endOverlay - startOverlayRender;
+    useVisionStore.getState().updateRenderTime("tOverlayRender", overlayRenderDuration);
+  });
 
   if (!isCameraEnabled) return null;
 
@@ -43,54 +229,10 @@ function VisionOverlayContainer({
         height: imageRect.height,
       }}
     >
-      {/* ── Layer 1: Camera Image (rendered by parent as <img>) ── */}
-
-      {/* ── Layer 2: Bounding Boxes ── */}
-      {targetBoxes.map((box) => {
-        // box.x / box.y are percentages (0–100) of frame dimensions (set in socket.ts)
-        // box.w / box.h are absolute pixels in frame coordinate space
-        // Use percentage for position (maps directly to overlay since it matches image)
-        // Scale width/height from frame pixels → display pixels
-        const drawW = box.w * scaleX;
-        const drawH = box.h * scaleY;
-
-        return (
-          <div
-            key={box.id}
-            className="absolute border-[0.5px] border-cyan-400/50 transition-all duration-200 ease-out z-20"
-            style={{
-              left: `${box.x}%`,
-              top: `${box.y}%`,
-              width: drawW,
-              height: drawH,
-            }}
-          >
-            {/* Corner brackets */}
-            <div className="absolute -left-[1px] -top-[1px] w-2.5 h-2.5 border-l-[1.5px] border-t-[1.5px] border-cyan-300" />
-            <div className="absolute -right-[1px] -top-[1px] w-2.5 h-2.5 border-r-[1.5px] border-t-[1.5px] border-cyan-300" />
-            <div className="absolute -left-[1px] -bottom-[1px] w-2.5 h-2.5 border-l-[1.5px] border-b-[1.5px] border-cyan-300" />
-            <div className="absolute -right-[1px] -bottom-[1px] w-2.5 h-2.5 border-r-[1.5px] border-b-[1.5px] border-cyan-300" />
-
-            {/* Detection label — anchored to top-left of box */}
-            <div className="absolute -top-5 left-0 bg-black/85 border border-white/10 text-cyan-300 text-[8px] font-mono font-bold px-1.5 py-0.5 whitespace-nowrap uppercase tracking-wider rounded flex items-center gap-1.5 shadow-lg">
-              <span className="w-1 h-1 rounded-full bg-red-500 animate-pulse" />
-              <span>{box.label}</span>
-              <span className="text-slate-400 text-[7px]">{box.confidence}%</span>
-            </div>
-
-            {/* Box crosshair */}
-            <div className="absolute inset-0 flex items-center justify-center opacity-15">
-              <div className="w-3 h-[0.5px] bg-cyan-400" />
-              <div className="h-3 w-[0.5px] bg-cyan-400" />
-            </div>
-          </div>
-        );
-      })}
-
-      {/* ── Layer 3: Future Face Mesh (placeholder) ── */}
-      {/* ── Layer 4: Future Hand Landmarks (placeholder) ── */}
-      {/* ── Layer 5: Future Pose (placeholder) ── */}
-      {/* ── Layer 6: Future OCR (placeholder) ── */}
+      <canvas
+        ref={canvasRef}
+        className="absolute top-0 left-0 pointer-events-none"
+      />
 
       {/* ── Layer 7: Crosshair (center of overlay) ── */}
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-30">
@@ -105,11 +247,32 @@ function VisionOverlayContainer({
       </div>
     </div>
   );
-}
+});
 
 export default function CameraViewport() {
-  const { isCameraEnabled, targetBoxes, frame } = useCameraStore();
-  const { visionMode, frameWidth, frameHeight } = useVisionStore();
+  const startReactRender = performance.now();
+
+  const isCameraEnabled = useCameraStore((state) => state?.isCameraEnabled ?? false);
+  const targetBoxes = useCameraStore((state) => state?.targetBoxes ?? []);
+  const faceLandmarks = useCameraStore((state) => state?.faceLandmarks ?? []);
+  const frame = useCameraStore((state) => state?.frame ?? null);
+
+  useEffect(() => {
+    if (!isCameraEnabled) return;
+    const endRender = performance.now();
+    const reactRenderDuration = endRender - startReactRender;
+    useVisionStore.getState().updateRenderTime("tReactRender", reactRenderDuration);
+
+    const currentProfile = useVisionStore.getState().currentProfile;
+    if (currentProfile && currentProfile.tPythonStart) {
+      const tEndToEnd = Date.now() - currentProfile.tPythonStart;
+      useVisionStore.getState().updateRenderTime("tEndToEnd", tEndToEnd);
+    }
+  });
+
+  const visionMode = useVisionStore((state) => state?.visionMode ?? "standard");
+  const frameWidth = useVisionStore((state) => state?.frameWidth ?? 0);
+  const frameHeight = useVisionStore((state) => state?.frameHeight ?? 0);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const imgRef = useRef<HTMLImageElement>(null);
@@ -436,6 +599,7 @@ export default function CameraViewport() {
                 frameWidth={frameWidth}
                 frameHeight={frameHeight}
                 targetBoxes={targetBoxes}
+                faceLandmarks={faceLandmarks}
                 isCameraEnabled={isCameraEnabled}
               />
             </div>

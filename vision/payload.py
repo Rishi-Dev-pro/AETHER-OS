@@ -1,7 +1,7 @@
 from utils import get_iso_timestamp
 
 class VisionPayload:
-    def __init__(self, camera_active=False, fps=0, width=0, height=0, faces=None, status="standby", warnings=None):
+    def __init__(self, camera_active=False, fps=0, width=0, height=0, faces=None, status="standby", warnings=None, metrics=None):
         self.timestamp = get_iso_timestamp()
         self.camera = camera_active
         self.fps = fps
@@ -18,6 +18,7 @@ class VisionPayload:
         
         self.status = status
         self.warnings = warnings if warnings is not None else []
+        self.metrics = metrics if metrics is not None else {}
 
     def to_dict(self):
         return {
@@ -33,5 +34,6 @@ class VisionPayload:
             "emotions": self.emotions,
             "ocr": self.ocr,
             "status": self.status,
-            "warnings": self.warnings
+            "warnings": self.warnings,
+            "metrics": self.metrics
         }

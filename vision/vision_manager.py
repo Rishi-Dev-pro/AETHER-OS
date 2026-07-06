@@ -3,6 +3,8 @@ import json
 import os
 import sys
 import threading
+import cv2
+import base64
 
 # Add modules directory to path to support standard imports
 sys.path.append(os.path.join(os.path.dirname(__file__), "modules"))
@@ -11,14 +13,23 @@ from camera import CameraManager
 from payload import VisionPayload
 from utils import log_info, log_error, log_success
 from face_detection import FaceDetectorModule
+from face_mesh import FaceMeshModule
+from face_intelligence import FaceIntelligenceModule
 
 class VisionManager:
     def __init__(self, camera_index=0, width=640, height=480, target_fps=30):
         self.camera_manager = CameraManager(index=camera_index, width=width, height=height)
         self.target_fps = target_fps
         self._stop_event = threading.Event()
+        
         self.face_detector = FaceDetectorModule()
         self.face_detector_active = False
+        self.face_mesh = FaceMeshModule()
+        self.face_mesh_active = False
+        self.face_intelligence = FaceIntelligenceModule()
+        
+        # Profiler variables
+        self.last_write_duration = 0.0
 
     @property
     def running(self):
@@ -28,8 +39,9 @@ class VisionManager:
         # Graceful startup
         camera_ok = self.camera_manager.start()
         
-        # Initialize detector once
+        # Initialize detectors once on start
         self.face_detector_active = self.face_detector.initialize()
+        self.face_mesh_active = self.face_mesh.initialize()
         
         self._stop_event.clear()
         last_time = time.time()
@@ -40,10 +52,12 @@ class VisionManager:
         log_success("✓ Streaming Started")
 
         while not self._stop_event.is_set():
-            start_frame_time = time.time()
+            t_python_start = time.time() * 1000.0  # epoch millisecond timestamp
             
-            # Capture frame
+            # 1. Camera Capture Time
+            start_cap = time.perf_counter()
             ret, frame = self.camera_manager.read_frame()
+            t_cap = (time.perf_counter() - start_cap) * 1000.0
             
             # Calculate live FPS every second
             frame_count += 1
@@ -54,20 +68,34 @@ class VisionManager:
                 frame_count = 0
                 last_time = now
 
-            # Process frame with face detector
+            # Process frame through detection stages
             faces = []
+            t_det = 0.0
+            t_mesh = 0.0
+            t_intel = 0.0
+            
             if ret and frame is not None:
+                # 2. Face Detection Time
                 if self.face_detector_active:
-                    start_detect_time = time.time()
+                    start_det = time.perf_counter()
                     faces = self.face_detector.detect_faces(frame)
-                    detect_duration = time.time() - start_detect_time
+                    t_det = (time.perf_counter() - start_det) * 1000.0
                     
                     if len(faces) > 0:
                         print("✓ Face Detected", flush=True)
                         print(f"✓ Faces Count: {len(faces)}", flush=True)
-                    
-                    detection_fps = round(1.0 / max(0.001, detect_duration), 1)
-                    print(f"✓ Detection FPS: {detection_fps}", flush=True)
+                
+                # 3. Face Mesh Time
+                if self.face_mesh_active and len(faces) > 0:
+                    start_mesh = time.perf_counter()
+                    faces = self.face_mesh.process(frame, faces)
+                    t_mesh = (time.perf_counter() - start_mesh) * 1000.0
+                
+                # 4. Face Intelligence Time
+                if len(faces) > 0:
+                    start_intel = time.perf_counter()
+                    faces = self.face_intelligence.calculate(faces)
+                    t_intel = (time.perf_counter() - start_intel) * 1000.0
 
             # Create protocol-compliant payload
             camera_active = ret and self.camera_manager.is_active
@@ -88,26 +116,53 @@ class VisionManager:
 
             # Compress frame to JPEG and encode to base64
             frame_data_url = None
+            t_jpeg = 0.0
+            t_b64 = 0.0
+            
             if ret and frame is not None:
                 try:
-                    import cv2
-                    import base64
-                    success, buffer = cv2.imencode('.jpg', frame)
+                    # 5. JPEG Encoding Time (Quality 80)
+                    start_jpeg = time.perf_counter()
+                    success, buffer = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
+                    t_jpeg = (time.perf_counter() - start_jpeg) * 1000.0
+                    
                     if success:
+                        # 6. Base64 Encoding Time
+                        start_b64 = time.perf_counter()
                         base64_str = base64.b64encode(buffer).decode('utf-8')
                         frame_data_url = f"data:image/jpeg;base64,{base64_str}"
+                        t_b64 = (time.perf_counter() - start_b64) * 1000.0
                 except Exception as e:
                     log_error(f"Error encoding frame: {str(e)}")
 
-            # Print compound payload (frame + metadata) in JSON format to stdout
+            t_python_end = time.time() * 1000.0  # epoch millisecond timestamp
+
+            # Construct profile payload
+            profile = {
+                "tPythonStart": t_python_start,
+                "tCameraCapture": t_cap,
+                "tFaceDetect": t_det,
+                "tFaceMesh": t_mesh,
+                "tFaceIntel": t_intel,
+                "tJpegEncode": t_jpeg,
+                "tBase64Encode": t_b64,
+                "tPythonWrite": self.last_write_duration,
+                "tPythonEnd": t_python_end
+            }
+
             output_data = {
                 "frame": frame_data_url,
-                "payload": payload.to_dict()
+                "payload": payload.to_dict(),
+                "profile": profile
             }
+
+            # 7. Python stdout Write Time
+            start_write = time.perf_counter()
             print(json.dumps(output_data), flush=True)
+            self.last_write_duration = (time.perf_counter() - start_write) * 1000.0
 
             # Enforce target FPS frame pacing
-            time_spent = time.time() - start_frame_time
+            time_spent = (time.time() * 1000.0 - t_python_start) / 1000.0
             delay = max(0.001, (1.0 / self.target_fps) - time_spent)
             time.sleep(delay)
 
@@ -117,4 +172,5 @@ class VisionManager:
         log_info("Stopping vision manager loop...")
         self._stop_event.set()
         self.face_detector.close()
+        self.face_mesh.close()
         self.camera_manager.release()

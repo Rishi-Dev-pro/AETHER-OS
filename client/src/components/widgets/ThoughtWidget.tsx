@@ -3,7 +3,7 @@ import type { LogEntry } from "../../store/assistantStore";
 import { useEffect, useRef } from "react";
 
 export default function ThoughtWidget() {
-  const { logs } = useAssistantStore();
+  const logs = useAssistantStore((state) => state?.logs ?? []);
   const listEndRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll logs container to bottom when new logs stream in

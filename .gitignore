@@ -41,3 +41,5 @@ coverage/
 # Python Models (optional if downloadable)
 vision/models/*.task
 vision/models/*.tflite
+vision/*.tflite
+vision/*.task

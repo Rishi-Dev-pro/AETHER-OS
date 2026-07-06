@@ -9,6 +9,7 @@ const IS_DEV = import.meta.env.DEV;
 
 let socket: Socket | null = null;
 let heartbeatInterval: any = null;
+let lastNodeDrops = 0;
 
 const logDev = (...args: any[]) => {
   if (IS_DEV) {
@@ -101,10 +102,63 @@ const setupSocketListeners = (s: Socket) => {
   });
 
   s.on("vision:update", (data: any) => {
+    const tBrowserReceive = Date.now();
     logDev("Received vision update:", data);
     if (data && data.payload) {
-      const { frame, payload } = data;
+      const { frame, payload, profile } = data;
+
+      // Real-time Age Check (Drop stale frames)
+      if (profile && profile.tPythonStart) {
+        const age = tBrowserReceive - profile.tPythonStart;
+        if (age > 150) {
+          console.warn(`[Socket.IO Client] Dropping stale frame (age: ${age}ms)`);
+          useVisionStore.getState().incrementDroppedFrames(1);
+          return;
+        }
+      }
+
+      // Sync server-side dropped frames
+      if (profile && typeof profile.droppedFramesNode === "number") {
+        const nodeDiff = profile.droppedFramesNode - lastNodeDrops;
+        if (nodeDiff > 0) {
+          useVisionStore.getState().incrementDroppedFrames(nodeDiff);
+          lastNodeDrops = profile.droppedFramesNode;
+        }
+      }
+
       useVisionStore.getState().updateVisionData(payload);
+
+      if (profile) {
+        const nodeReceiveDuration = profile.tNodeReceive && profile.tPythonEnd
+          ? profile.tNodeReceive - profile.tPythonEnd
+          : 0;
+        const browserReceiveDuration = profile.tNodeEmitTimestamp
+          ? tBrowserReceive - profile.tNodeEmitTimestamp
+          : 0;
+
+        const browserProfile = {
+          ...profile,
+          tNodeReceive: nodeReceiveDuration,
+          tBrowserReceive: browserReceiveDuration,
+        };
+
+        useVisionStore.getState().updateProfile(browserProfile);
+
+        if (frame) {
+          const img = new Image();
+          img.src = frame;
+          const startDecode = performance.now();
+          img.decode()
+            .then(() => {
+              const tImageDecode = performance.now() - startDecode;
+              useVisionStore.getState().updateRenderTime("tImageDecode", tImageDecode);
+            })
+            .catch(() => {
+              useVisionStore.getState().updateRenderTime("tImageDecode", 0);
+            });
+        }
+      }
+
       useCameraStore.getState().updateCameraFeed(
         frame,
         payload.camera,
@@ -116,6 +170,7 @@ const setupSocketListeners = (s: Socket) => {
       // Map faces to targetBoxes
       if (!payload.camera || !frame) {
         useCameraStore.getState().setTargetBoxes([]);
+        useCameraStore.getState().setFaceLandmarks([]);
         useCameraStore.getState().updateDetectedItems({ faces: 0, hands: 0, objects: 0, emotion: "None" });
       } else {
         if (Array.isArray(payload.faces)) {
@@ -133,6 +188,15 @@ const setupSocketListeners = (s: Socket) => {
             };
           });
           useCameraStore.getState().setTargetBoxes(boxes);
+
+          // Extract face landmarks for Face Mesh overlay
+          const landmarkEntries = payload.faces
+            .filter((face: any) => Array.isArray(face.landmarks) && face.landmarks.length > 0)
+            .map((face: any) => ({
+              id: face.id.toString(),
+              landmarks: face.landmarks,
+            }));
+          useCameraStore.getState().setFaceLandmarks(landmarkEntries);
 
           // Get emotion
           let detectedEmotion = "None";
@@ -163,6 +227,8 @@ const setupSocketListeners = (s: Socket) => {
   s.on("camera:stopped", (data: any) => {
     logDev("Camera stopped confirmed by backend:", data);
     useCameraStore.getState().resetCameraFeed();
+    lastNodeDrops = 0;
+    useVisionStore.setState({ droppedFrames: 0 });
   });
 
   /**
@@ -173,6 +239,8 @@ const setupSocketListeners = (s: Socket) => {
     logDev("Camera crashed notification:", data);
     useCameraStore.getState().resetCameraFeed();
     useCameraStore.getState().setCameraEnabled(false);
+    lastNodeDrops = 0;
+    useVisionStore.setState({ droppedFrames: 0 });
   });
 
   // ─────────────────────────────────────────────────────────────────────

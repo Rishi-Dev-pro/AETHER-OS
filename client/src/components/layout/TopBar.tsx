@@ -14,11 +14,13 @@ import { useVisionStore } from "../../store/visionStore";
 import { useSocketStore } from "../../store/socketStore";
 
 export default function TopBar() {
-  const { isCameraEnabled } = useCameraStore();
-  const { voiceStatus } = useVoiceStore();
-  const { visionMode } = useVisionStore();
-  const { cpu, latency, updateMetrics } = useSystemStore();
-  const { socketConnected, latency: socketLatency } = useSocketStore();
+  const isCameraEnabled = useCameraStore((state) => state?.isCameraEnabled ?? false);
+  const voiceStatus = useVoiceStore((state) => state?.voiceStatus ?? "ONLINE");
+  const visionMode = useVisionStore((state) => state?.visionMode ?? "standard");
+  const cpu = useSystemStore((state) => state?.cpu ?? 0);
+  const updateMetrics = useSystemStore((state) => state?.updateMetrics);
+  const socketConnected = useSocketStore((state) => state?.socketConnected ?? false);
+  const socketLatency = useSocketStore((state) => state?.latency ?? null);
 
   const [timeStr, setTimeStr] = useState("");
 
@@ -38,18 +40,16 @@ export default function TopBar() {
     const interval = setInterval(() => {
       // Simulate natural oscillations
       const cpuDelta = (Math.random() - 0.5) * 3;
-      const latDelta = (Math.random() - 0.5) * 4;
       const memDelta = (Math.random() - 0.5) * 2;
 
       updateMetrics({
         cpu: Math.max(2, Math.min(99, Math.round(cpu + cpuDelta))),
-        latency: Math.max(5, Math.min(150, Math.round(latency + latDelta))),
         memory: Math.max(380, Math.min(950, Math.round(420 + memDelta))),
       });
     }, 2000);
 
     return () => clearInterval(interval);
-  }, [cpu, latency, updateMetrics]);
+  }, [cpu, updateMetrics]);
 
   return (
     <header className="absolute top-0 left-0 right-0 z-50 h-16 shrink-0 px-8 border-b border-white/[0.06] bg-[#080a0f]/90 flex items-center justify-between shadow-lg">
