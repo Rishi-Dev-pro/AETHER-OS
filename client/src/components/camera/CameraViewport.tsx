@@ -6,6 +6,7 @@ import VisionHUD from "../hud/VisionHUD";
 import { useCameraStore } from "../../store/cameraStore";
 import { useVisionStore } from "../../store/visionStore";
 import { Camera } from "lucide-react";
+import { interactionRegistry } from "../../interaction/interactionRegistry";
 
 /**
  * VisionOverlayContainer
@@ -156,7 +157,283 @@ const drawFaceMesh = (
   ctx.fill();
 };
 
-const drawHands = (_ctx: CanvasRenderingContext2D) => {};
+const HAND_CONNECTIONS = [
+  [0, 1], [1, 2], [2, 3], [3, 4], // Thumb
+  [0, 5], [5, 6], [6, 7], [7, 8], // Index
+  [9, 10], [10, 11], [11, 12],    // Middle
+  [13, 14], [14, 15], [15, 16],  // Ring
+  [0, 17], [17, 18], [18, 19], [19, 20], // Pinky
+  [5, 9], [9, 13], [13, 17]       // Palm MCP joints
+];
+
+const drawHands = (
+  ctx: CanvasRenderingContext2D,
+  hands: any[],
+  scaleX: number,
+  scaleY: number,
+  imageRect: { width: number; height: number }
+) => {
+  if (!hands || hands.length === 0) return;
+
+  hands.forEach((hand) => {
+    if (!hand) return;
+
+    // 1. Draw debug bounding box
+    const drawX = (hand.bbox?.x ?? 0) * scaleX;
+    const drawY = (hand.bbox?.y ?? 0) * scaleY;
+    const drawW = (hand.bbox?.width ?? 0) * scaleX;
+    const drawH = (hand.bbox?.height ?? 0) * scaleY;
+
+    // Draw box outline (neon pink/magenta)
+    ctx.strokeStyle = "rgba(236, 72, 153, 0.4)";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(drawX, drawY, drawW, drawH);
+
+    // Corner brackets
+    ctx.strokeStyle = "rgba(244, 114, 182, 0.85)";
+    ctx.lineWidth = 1.5;
+    const bracketLen = 10;
+
+    // Top-left
+    ctx.beginPath();
+    ctx.moveTo(drawX + bracketLen, drawY);
+    ctx.lineTo(drawX, drawY);
+    ctx.lineTo(drawX, drawY + bracketLen);
+    ctx.stroke();
+
+    // Top-right
+    ctx.beginPath();
+    ctx.moveTo(drawX + drawW - bracketLen, drawY);
+    ctx.lineTo(drawX + drawW, drawY);
+    ctx.lineTo(drawX + drawW, drawY + bracketLen);
+    ctx.stroke();
+
+    // Bottom-left
+    ctx.beginPath();
+    ctx.moveTo(drawX, drawY + drawH - bracketLen);
+    ctx.lineTo(drawX, drawY + drawH);
+    ctx.lineTo(drawX + bracketLen, drawY + drawH);
+    ctx.stroke();
+
+    // Bottom-right
+    ctx.beginPath();
+    ctx.moveTo(drawX + drawW - bracketLen, drawY + drawH);
+    ctx.lineTo(drawX + drawW, drawY + drawH);
+    ctx.lineTo(drawX + drawW, drawY + drawH - bracketLen);
+    ctx.stroke();
+
+    // Text Label Card for Hand Info
+    const text = `${(hand.handedness || "UNKNOWN").toUpperCase()} HAND ${Math.round((hand.confidence || 0) * 100)}%`;
+    ctx.font = "bold 8px monospace";
+    ctx.textBaseline = "middle";
+    const textWidth = ctx.measureText(text).width;
+    const cardW = textWidth + 18;
+    const cardH = 15;
+    const cardX = drawX;
+    const cardY = drawY - 20;
+
+    // Draw background card
+    ctx.fillStyle = "rgba(0, 0, 0, 0.85)";
+    ctx.beginPath();
+    if (ctx.roundRect) {
+      ctx.roundRect(cardX, cardY, cardW, cardH, 4);
+    } else {
+      ctx.rect(cardX, cardY, cardW, cardH);
+    }
+    ctx.fill();
+
+    // Card border
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.1)";
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // Status indicator dot (pink)
+    ctx.fillStyle = "rgba(236, 72, 153, 1)";
+    ctx.beginPath();
+    ctx.arc(cardX + 7, cardY + cardH / 2, 2, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Text Label
+    ctx.fillStyle = "rgba(244, 114, 182, 1)";
+    ctx.fillText(text, cardX + 14, cardY + cardH / 2 + 0.5);
+
+    // 2. Draw connections (lines)
+    if (Array.isArray(hand.landmarks)) {
+      ctx.strokeStyle = "rgba(236, 72, 153, 0.45)"; // Pink line
+      ctx.lineWidth = 1.5;
+      HAND_CONNECTIONS.forEach(([startIdx, endIdx]) => {
+        const start = hand.landmarks[startIdx];
+        const end = hand.landmarks[endIdx];
+        if (start && end) {
+          ctx.beginPath();
+          ctx.moveTo(start.x * imageRect.width, start.y * imageRect.height);
+          ctx.lineTo(end.x * imageRect.width, end.y * imageRect.height);
+          ctx.stroke();
+        }
+      });
+
+      // 3. Draw landmarks (circles)
+      // Pass 1: Outer glow circles (radius 3.5, low opacity pink)
+      ctx.fillStyle = "rgba(236, 72, 153, 0.25)";
+      ctx.beginPath();
+      hand.landmarks.forEach((lm: any) => {
+        if (!lm) return;
+        const x = (lm.x ?? 0) * imageRect.width;
+        const y = (lm.y ?? 0) * imageRect.height;
+        ctx.moveTo(x + 3.5, y);
+        ctx.arc(x, y, 3.5, 0, Math.PI * 2);
+      });
+      ctx.fill();
+
+      // Pass 2: Inner solid core circles (radius 1.5, high opacity white)
+      ctx.fillStyle = "rgba(255, 255, 255, 0.95)";
+      ctx.beginPath();
+      hand.landmarks.forEach((lm: any) => {
+        if (!lm) return;
+        const x = (lm.x ?? 0) * imageRect.width;
+        const y = (lm.y ?? 0) * imageRect.height;
+        ctx.moveTo(x + 1.5, y);
+        ctx.arc(x, y, 1.5, 0, Math.PI * 2);
+      });
+      ctx.fill();
+    }
+
+    // 4. Draw palm gesture badge if gesture is detected
+    if (hand.gesture) {
+      const cx = (hand.center?.x ?? 0) * scaleX;
+      const cy = (hand.center?.y ?? 0) * scaleY;
+      
+      const gText = hand.gesture.toUpperCase();
+      ctx.font = "bold 9px monospace";
+      const gWidth = ctx.measureText(gText).width;
+      
+      // Draw small semi-transparent black background
+      ctx.fillStyle = "rgba(0, 0, 0, 0.8)";
+      ctx.beginPath();
+      if (ctx.roundRect) {
+        ctx.roundRect(cx - gWidth / 2 - 6, cy - 8, gWidth + 12, 16, 4);
+      } else {
+        ctx.rect(cx - gWidth / 2 - 6, cy - 8, gWidth + 12, 16);
+      }
+      ctx.fill();
+      
+      // Draw neon pink border
+      ctx.strokeStyle = "rgba(236, 72, 153, 0.85)";
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      
+      // Draw text
+      ctx.fillStyle = "rgba(255, 255, 255, 0.95)";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(gText, cx, cy + 0.5);
+      ctx.textAlign = "left"; // reset default text-align
+    }
+
+    // 5. Draw active pinch indicator
+    if (hand.pinch && hand.pinch.state !== "inactive") {
+      const thumbTip = hand.landmarks[4];
+      const indexTip = hand.landmarks[8];
+      if (thumbTip && indexTip) {
+        const tx = thumbTip.x * imageRect.width;
+        const ty = thumbTip.y * imageRect.height;
+        const ix = indexTip.x * imageRect.width;
+        const iy = indexTip.y * imageRect.height;
+        
+        // Midpoint
+        const mx = (tx + ix) / 2;
+        const my = (ty + iy) / 2;
+        
+        // Draw connection line between thumb and index tips
+        ctx.beginPath();
+        ctx.moveTo(tx, ty);
+        ctx.lineTo(ix, iy);
+        ctx.strokeStyle = hand.pinch.active ? "rgba(34, 197, 94, 0.85)" : "rgba(156, 163, 175, 0.4)";
+        ctx.lineWidth = 1 + hand.pinch.strength * 3;
+        ctx.stroke();
+        
+        // Draw glowing midpoint indicator circle
+        if (hand.pinch.active) {
+          const glowRadius = 4 + hand.pinch.strength * 6;
+          ctx.fillStyle = "rgba(34, 197, 94, 0.3)";
+          ctx.beginPath();
+          ctx.arc(mx, my, glowRadius, 0, Math.PI * 2);
+          ctx.fill();
+          
+          ctx.fillStyle = "rgba(255, 255, 255, 0.95)";
+          ctx.beginPath();
+          ctx.arc(mx, my, 2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        
+        // Draw text label next to midpoint
+        const pText = `PINCH ${hand.pinch.state.toUpperCase()} (${Math.round(hand.pinch.strength * 100)}%)`;
+        ctx.font = "bold 8px monospace";
+        ctx.fillStyle = hand.pinch.active ? "rgba(34, 197, 94, 1)" : "rgba(156, 163, 175, 1)";
+        ctx.fillText(pText, mx + 8, my + 3);
+      }
+    }
+  });
+};
+
+const drawPointer = (
+  ctx: CanvasRenderingContext2D,
+  pointer: any,
+  imageRect: { width: number; height: number }
+) => {
+  if (!pointer || !pointer.visible) return;
+
+  // 1. Draw raw pointer as subtle debug overlay (if present)
+  if (pointer.raw) {
+    const rx = pointer.raw.x * imageRect.width;
+    const ry = pointer.raw.y * imageRect.height;
+    
+    ctx.strokeStyle = "rgba(156, 163, 175, 0.35)"; // Subtle grey dotted target
+    ctx.lineWidth = 1;
+    ctx.setLineDash([2, 2]); // Dotted line
+    ctx.beginPath();
+    ctx.arc(rx, ry, 4, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]); // Reset line dash
+  }
+
+  const px = (pointer.x ?? 0) * imageRect.width;
+  const py = (pointer.y ?? 0) * imageRect.height;
+
+  // Draw concentric rings
+  ctx.strokeStyle = pointer.pinching ? "rgba(220, 38, 38, 0.85)" : "rgba(6, 182, 212, 0.85)"; // Red if pinching, Cyan if hovering
+  ctx.lineWidth = 1.5;
+
+  // Outer crosshair brackets/ticks
+  const size = pointer.pinching ? 6 : 10;
+  ctx.beginPath();
+  // Horizontal crosshair
+  ctx.moveTo(px - size, py);
+  ctx.lineTo(px + size, py);
+  // Vertical crosshair
+  ctx.moveTo(px, py - size);
+  ctx.lineTo(px, py + size);
+  ctx.stroke();
+
+  // Draw central dot
+  ctx.fillStyle = pointer.pinching ? "rgba(220, 38, 38, 0.95)" : "rgba(6, 182, 212, 0.95)";
+  ctx.beginPath();
+  ctx.arc(px, py, 2.5, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Draw glowing outer circle
+  ctx.strokeStyle = pointer.pinching ? "rgba(220, 38, 38, 0.3)" : "rgba(6, 182, 212, 0.3)";
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.arc(px, py, pointer.pinching ? 10 : 6, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // Draw label card next to pointer for debug telemetry
+  const text = `PTR: (${Math.round(pointer.x * 100)}, ${Math.round(pointer.y * 100)})${pointer.pinching ? " [PINCH]" : ""}`;
+  ctx.font = "bold 7px monospace";
+  ctx.fillStyle = pointer.pinching ? "rgba(220, 38, 38, 0.9)" : "rgba(6, 182, 212, 0.9)";
+  ctx.fillText(text, px + size + 4, py + 3);
+};
 const drawPose = (_ctx: CanvasRenderingContext2D) => {};
 const drawObjects = (_ctx: CanvasRenderingContext2D) => {};
 const drawOCR = (_ctx: CanvasRenderingContext2D) => {};
@@ -167,6 +444,8 @@ const VisionOverlayContainer = memo(function VisionOverlayContainer({
   frameHeight,
   targetBoxes,
   faceLandmarks,
+  hands,
+  pointer,
   isCameraEnabled,
 }: {
   imageRect: { width: number; height: number };
@@ -174,10 +453,23 @@ const VisionOverlayContainer = memo(function VisionOverlayContainer({
   frameHeight: number;
   targetBoxes: ReturnType<typeof useCameraStore.getState>["targetBoxes"];
   faceLandmarks: ReturnType<typeof useCameraStore.getState>["faceLandmarks"];
+  hands: ReturnType<typeof useCameraStore.getState>["hands"];
+  pointer: ReturnType<typeof useCameraStore.getState>["pointer"];
   isCameraEnabled: boolean;
 }) {
   const startOverlayRender = performance.now();
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (el) {
+      interactionRegistry.registerViewport(el);
+    }
+    return () => {
+      interactionRegistry.unregisterViewport();
+    };
+  }, [imageRect]);
 
   // Coordinate mapping: Python frame pixels → displayed image pixels
   const scaleX = imageRect.width > 0 && frameWidth > 0 ? imageRect.width / frameWidth : 1;
@@ -204,13 +496,14 @@ const VisionOverlayContainer = memo(function VisionOverlayContainer({
     // Draw dynamic overlay layers
     drawBoundingBoxes(ctx, targetBoxes, scaleX, scaleY, imageRect);
     drawFaceMesh(ctx, faceLandmarks, imageRect);
+    drawHands(ctx, hands, scaleX, scaleY, imageRect);
+    drawPointer(ctx, pointer, imageRect);
 
     // Expose drawing placeholders for future compatibility modules
-    drawHands(ctx);
     drawPose(ctx);
     drawObjects(ctx);
     drawOCR(ctx);
-  }, [targetBoxes, faceLandmarks, imageRect, scaleX, scaleY, isCameraEnabled]);
+  }, [targetBoxes, faceLandmarks, hands, pointer, imageRect, scaleX, scaleY, isCameraEnabled]);
 
   useEffect(() => {
     if (!isCameraEnabled) return;
@@ -223,6 +516,7 @@ const VisionOverlayContainer = memo(function VisionOverlayContainer({
 
   return (
     <div
+      ref={containerRef}
       className="absolute pointer-events-none"
       style={{
         width: imageRect.width,
@@ -255,6 +549,8 @@ export default function CameraViewport() {
   const isCameraEnabled = useCameraStore((state) => state?.isCameraEnabled ?? false);
   const targetBoxes = useCameraStore((state) => state?.targetBoxes ?? []);
   const faceLandmarks = useCameraStore((state) => state?.faceLandmarks ?? []);
+  const hands = useCameraStore((state) => state?.hands ?? []);
+  const pointer = useCameraStore((state) => state?.pointer ?? { x: 0, y: 0, visible: false, pinching: false });
   const frame = useCameraStore((state) => state?.frame ?? null);
 
   useEffect(() => {
@@ -600,6 +896,8 @@ export default function CameraViewport() {
                 frameHeight={frameHeight}
                 targetBoxes={targetBoxes}
                 faceLandmarks={faceLandmarks}
+                hands={hands}
+                pointer={pointer}
                 isCameraEnabled={isCameraEnabled}
               />
             </div>

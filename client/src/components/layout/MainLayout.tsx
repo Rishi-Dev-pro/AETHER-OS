@@ -8,6 +8,7 @@ import SystemWidget from "../widgets/SystemWidget";
 import VisionWidget from "../widgets/VisionWidget";
 import StatsWidget from "../widgets/StatsWidget";
 import ThoughtWidget from "../widgets/ThoughtWidget";
+import GlobalPointer from "../camera/GlobalPointer";
 
 export default function MainLayout() {
   return (
@@ -51,6 +52,9 @@ export default function MainLayout() {
 
       {/* Bottom Command Dock */}
       <BottomDock />
+
+      {/* Global Spatial Cursor Overlay */}
+      <GlobalPointer />
     </div>
   );
 }

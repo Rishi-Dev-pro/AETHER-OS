@@ -11,7 +11,8 @@ import { useVisionStore } from "../../store/visionStore";
 import type { VisionMode } from "../../store/visionStore";
 import { useAssistantStore } from "../../store/assistantStore";
 import { emitCameraStart, emitCameraStop } from "../../services/socket";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useInteractive } from "../../interaction/useInteractive";
 
 export default function BottomDock() {
   const { isCameraEnabled, toggleCamera } = useCameraStore();
@@ -19,6 +20,23 @@ export default function BottomDock() {
   const { visionMode, setVisionMode } = useVisionStore();
   const { addLog } = useAssistantStore();
   const [hoveredBtn, setHoveredBtn] = useState<string | null>(null);
+
+  const { ref: micRef, isHovered: isMicHovered, isPressed: isMicPressed } = useInteractive<HTMLButtonElement>("dock-mic");
+
+  useEffect(() => {
+    if (isMicHovered) {
+      setHoveredBtn("TOGGLE VOICE CONTROL");
+    } else if (hoveredBtn === "TOGGLE VOICE CONTROL") {
+      setHoveredBtn(null);
+    }
+  }, [isMicHovered]);
+
+  const micHoverClass = isMicHovered
+    ? "border-pink-400/80 bg-pink-500/15 text-pink-300 shadow-[0_0_15px_rgba(244,63,94,0.25)] scale-105"
+    : "";
+  const micPressClass = isMicPressed
+    ? "scale-90 bg-pink-500/35 border-pink-350 shadow-[0_0_20px_rgba(244,63,94,0.4)]"
+    : "";
 
   const handleCameraToggle = () => {
     const willEnable = !isCameraEnabled;
@@ -93,6 +111,7 @@ export default function BottomDock() {
 
           {/* Left Items */}
           <DockIconButton
+            id="camera"
             icon={<Camera size={18} />}
             active={isCameraEnabled}
             onClick={handleCameraToggle}
@@ -100,6 +119,7 @@ export default function BottomDock() {
           />
 
           <DockIconButton
+            id="scan"
             icon={<ScanSearch size={18} />}
             active={isCameraEnabled}
             onClick={handleAnalyzeToggle}
@@ -110,6 +130,7 @@ export default function BottomDock() {
           {/* Centered Microphone Element */}
           <div className="px-1.5 relative flex items-center justify-center">
             <button
+              ref={micRef}
               onClick={handleMicToggle}
               onMouseEnter={() => setHoveredBtn("TOGGLE VOICE CONTROL")}
               onMouseLeave={() => setHoveredBtn(null)}
@@ -130,6 +151,8 @@ export default function BottomDock() {
                   ? "border-pink-500/25 bg-pink-500/10 text-pink-400 shadow-[0_4px_16px_rgba(244,63,94,0.15)] hover:scale-105 active:scale-95"
                   : "border-white/[0.06] bg-white/[0.04] text-slate-400 hover:text-white hover:border-white/[0.12] hover:bg-white/[0.08] hover:scale-105 active:scale-95"
               }
+              ${micHoverClass}
+              ${micPressClass}
               `}
             >
               <Mic size={20} className={isListening ? "animate-pulse" : ""} />
@@ -144,7 +167,7 @@ export default function BottomDock() {
                 rounded-full
                 transition-all
                 duration-300
-                ${isListening ? "bg-pink-505 bg-pink-500 animate-pulse" : "bg-transparent"}
+                ${isListening ? "bg-pink-500 animate-pulse" : "bg-transparent"}
                 `}
               />
             </button>
@@ -152,6 +175,7 @@ export default function BottomDock() {
 
           {/* Right Items */}
           <DockIconButton
+            id="vision"
             icon={<Eye size={18} />}
             active={isCameraEnabled}
             onClick={cycleVisionMode}
@@ -159,6 +183,7 @@ export default function BottomDock() {
           />
 
           <DockIconButton
+            id="diagnostic"
             icon={<Command size={18} />}
             active={false}
             onClick={handleCommandTrigger}
@@ -171,20 +196,37 @@ export default function BottomDock() {
 }
 
 function DockIconButton({
+  id,
   icon,
   active,
   onClick,
   onHover,
   disabled = false,
 }: {
+  id: string;
   icon: React.ReactNode;
   active: boolean;
   onClick: () => void;
   onHover: (hovered: boolean) => void;
   disabled?: boolean;
 }) {
+  const { ref, isHovered, isPressed } = useInteractive<HTMLButtonElement>(`dock-${id}`);
+
+  useEffect(() => {
+    onHover(isHovered);
+  }, [isHovered, onHover]);
+
+  const hoverClass = isHovered
+    ? "border-cyan-400/80 bg-cyan-500/15 text-cyan-300 shadow-[0_0_15px_rgba(34,211,238,0.25)] scale-105"
+    : "";
+
+  const pressClass = isPressed
+    ? "scale-90 bg-cyan-500/30 border-cyan-300 shadow-[0_0_20px_rgba(34,211,238,0.4)]"
+    : "";
+
   return (
     <button
+      ref={ref}
       onClick={onClick}
       disabled={disabled}
       onMouseEnter={() => onHover(true)}
@@ -205,8 +247,8 @@ function DockIconButton({
         disabled
           ? "border-transparent bg-transparent text-slate-800 cursor-not-allowed opacity-20"
           : active
-          ? "border-cyan-500/20 bg-cyan-500/5 text-cyan-400 hover:bg-cyan-500/10 hover:border-cyan-500/30 hover:scale-105 active:scale-95"
-          : "border-white/[0.02] bg-white/[0.02] text-slate-400 hover:text-white hover:bg-white/[0.06] hover:border-white/[0.08] hover:scale-105 active:scale-95"
+          ? `border-cyan-500/20 bg-cyan-500/5 text-cyan-400 hover:bg-cyan-500/10 hover:border-cyan-500/30 hover:scale-105 active:scale-95 ${hoverClass} ${pressClass}`
+          : `border-white/[0.02] bg-white/[0.02] text-slate-400 hover:text-white hover:bg-white/[0.06] hover:border-white/[0.08] hover:scale-105 active:scale-95 ${hoverClass} ${pressClass}`
       }
       `}
     >

@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { VisionPayload, VisionFace } from "../types/vision";
+import type { VisionPayload, VisionFace, VisionHand } from "../types/vision";
 
 export type VisionMode = "standard" | "thermal" | "cyber" | "sonar";
 
@@ -41,6 +41,7 @@ interface VisionState {
   emotionStatus: string;
   lastUpdate: number | null;
   activeFaces: VisionFace[];
+  activeHands: VisionHand[];
   cameraFps: number;
   detectionFps: number;
   streamingFps: number;
@@ -82,6 +83,7 @@ export const useVisionStore = create<VisionState>((set, get) => {
     emotionStatus: "None",
     lastUpdate: null,
     activeFaces: [],
+    activeHands: [],
     cameraFps: 0,
     detectionFps: 0,
     streamingFps: 0,
@@ -115,6 +117,7 @@ export const useVisionStore = create<VisionState>((set, get) => {
           emotionStatus: detectedEmotion,
           lastUpdate: data?.timestamp ? new Date(data.timestamp).getTime() : Date.now(),
           activeFaces: data && Array.isArray(data.faces) ? data.faces : [],
+          activeHands: data && Array.isArray(data.hands) ? data.hands : [],
           cameraFps: data?.metrics?.cameraFps ?? 0,
           detectionFps: data?.metrics?.detectionFps ?? 0,
           streamingFps: data?.metrics?.streamingFps ?? 0,

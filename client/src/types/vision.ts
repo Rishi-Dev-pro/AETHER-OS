@@ -35,9 +35,27 @@ export interface VisionFace {
 
 export interface VisionHand {
   id: string | number;
-  side: "left" | "right";
-  confidence?: number;
-  landmarks?: Array<{ x: number; y: number; z: number }>;
+  side?: "left" | "right";
+  handedness: "left" | "right" | string;
+  confidence: number;
+  bbox: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
+  center: {
+    x: number;
+    y: number;
+  };
+  landmarks: Array<{ x: number; y: number; z: number }>;
+  gesture?: string;
+  pinch?: {
+    active: boolean;
+    state: "start" | "hold" | "release" | "inactive";
+    strength: number;
+    distance: number;
+  };
 }
 
 export interface VisionPose {
@@ -73,6 +91,35 @@ export interface VisionOCR {
   };
 }
 
+export interface VisionGesture {
+  handId: string | number;
+  gesture: string;
+  confidence: number;
+}
+
+export interface VisionPinch {
+  handId: string | number;
+  active: boolean;
+  state: "start" | "hold" | "release" | "inactive";
+  strength: number;
+  distance: number;
+}
+
+export interface VisionPointer {
+  x: number;
+  y: number;
+  visible: boolean;
+  pinching: boolean;
+  raw?: {
+    x: number;
+    y: number;
+  };
+  stable?: {
+    x: number;
+    y: number;
+  };
+}
+
 export interface VisionPayload {
   timestamp: string;
   camera: boolean;
@@ -82,6 +129,9 @@ export interface VisionPayload {
 
   faces: VisionFace[];
   hands: VisionHand[];
+  gestures?: VisionGesture[];
+  pinches?: VisionPinch[];
+  pointer?: VisionPointer;
   pose: VisionPose[];
   objects: VisionObject[];
   emotions: VisionEmotion[];

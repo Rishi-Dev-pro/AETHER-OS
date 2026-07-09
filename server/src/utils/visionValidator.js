@@ -38,8 +38,12 @@ export const validateVisionPayload = (payload) => {
     errors.push("status must be a string");
   }
 
+  if (payload.pointer !== undefined && typeof payload.pointer !== "object") {
+    errors.push("pointer must be an object");
+  }
+
   // Array properties
-  const arrayProps = ["faces", "hands", "pose", "objects", "emotions", "ocr"];
+  const arrayProps = ["faces", "hands", "gestures", "pinches", "pose", "objects", "emotions", "ocr"];
   arrayProps.forEach((prop) => {
     if (payload[prop] !== undefined && !Array.isArray(payload[prop])) {
       errors.push(`${prop} must be an array`);

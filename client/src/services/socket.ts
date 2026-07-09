@@ -128,6 +128,10 @@ const setupSocketListeners = (s: Socket) => {
 
       useVisionStore.getState().updateVisionData(payload);
 
+      // Update pointer engine state
+      const pointer = payload.pointer || { x: 0, y: 0, visible: false, pinching: false };
+      useCameraStore.getState().setPointer(pointer);
+
       if (profile) {
         const nodeReceiveDuration = profile.tNodeReceive && profile.tPythonEnd
           ? profile.tNodeReceive - profile.tPythonEnd
@@ -171,8 +175,29 @@ const setupSocketListeners = (s: Socket) => {
       if (!payload.camera || !frame) {
         useCameraStore.getState().setTargetBoxes([]);
         useCameraStore.getState().setFaceLandmarks([]);
+        useCameraStore.getState().setHands([]);
+        useCameraStore.getState().setPointer({ x: 0, y: 0, visible: false, pinching: false });
         useCameraStore.getState().updateDetectedItems({ faces: 0, hands: 0, objects: 0, emotion: "None" });
       } else {
+        const gestures = Array.isArray(payload.gestures) ? payload.gestures : [];
+        const pinches = Array.isArray(payload.pinches) ? payload.pinches : [];
+        const rawHands = Array.isArray(payload.hands) ? payload.hands : [];
+        const hands = rawHands.map((hand: any) => {
+          const gestureObj = gestures.find((g: any) => g.handId === hand.id);
+          const pinchObj = pinches.find((p: any) => p.handId === hand.id);
+          return {
+            ...hand,
+            gesture: gestureObj ? gestureObj.gesture : undefined,
+            pinch: pinchObj ? {
+              active: pinchObj.active,
+              state: pinchObj.state,
+              strength: pinchObj.strength,
+              distance: pinchObj.distance
+            } : undefined
+          };
+        });
+        useCameraStore.getState().setHands(hands);
+
         if (Array.isArray(payload.faces)) {
           const boxes = payload.faces.map((face: any) => {
             const xPercent = payload.frameWidth > 0 ? (face.bbox.x / payload.frameWidth) * 100 : 0;
