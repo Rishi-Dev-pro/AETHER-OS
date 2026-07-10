@@ -3,6 +3,7 @@ import { useSocketStore } from "../store/socketStore";
 import { useSystemStore } from "../store/systemStore";
 import { useVisionStore } from "../store/visionStore";
 import { useCameraStore } from "../store/cameraStore";
+import { useVoiceStore } from "../store/voiceStore";
 
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || "http://localhost:5000";
 const IS_DEV = import.meta.env.DEV;
@@ -50,6 +51,14 @@ export const emitCameraStop = () => {
   const s = getSocket();
   logDev("Emitting camera:stop");
   s.emit("camera:stop");
+};
+
+/**
+ * Emits voice:telemetry to the backend.
+ */
+export const emitVoiceTelemetry = (data: any) => {
+  const s = getSocket();
+  s.emit("voice:telemetry", data);
 };
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -271,6 +280,18 @@ const setupSocketListeners = (s: Socket) => {
     useCameraStore.getState().setCameraEnabled(false);
     lastNodeDrops = 0;
     useVisionStore.setState({ droppedFrames: 0 });
+  });
+
+  /**
+   * Received when another client broadcasts voice telemetry updates.
+   */
+  s.on("voice:telemetry", (data: any) => {
+    // Single-owner guard: If this client actively owns the microphone,
+    // ignore remote telemetry packets to prevent state overwriting.
+    if (useVoiceStore.getState().hasMicOwnership) {
+      return;
+    }
+    useVoiceStore.getState().updateVoiceTelemetry(data);
   });
 
   // ─────────────────────────────────────────────────────────────────────

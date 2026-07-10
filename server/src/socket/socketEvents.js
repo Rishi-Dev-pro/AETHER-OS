@@ -108,6 +108,11 @@ export const registerSocketEvents = (io, socket) => {
     socket.broadcast.emit("os:state_changed", data);
   });
 
+  // Relay voice telemetry to other clients
+  socket.on("voice:telemetry", (data) => {
+    socket.broadcast.emit("voice:telemetry", data);
+  });
+
   // Client disconnected
   socket.on("disconnect", () => {
     logger.info(`Websocket client disconnected: ${socket.id}`);

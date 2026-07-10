@@ -16,7 +16,8 @@ import { useInteractive } from "../../interaction/useInteractive";
 
 export default function BottomDock() {
   const { isCameraEnabled, toggleCamera } = useCameraStore();
-  const { isListening, toggleListening } = useVoiceStore();
+  const isListening = useVoiceStore((state) => state.isListening);
+  const toggleListening = useVoiceStore((state) => state.toggleListening);
   const { visionMode, setVisionMode } = useVisionStore();
   const { addLog } = useAssistantStore();
   const [hoveredBtn, setHoveredBtn] = useState<string | null>(null);
