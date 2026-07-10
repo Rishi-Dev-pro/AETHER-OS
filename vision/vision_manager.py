@@ -20,6 +20,7 @@ from gesture_recognition import GestureRecognizerModule
 from pinch_detection import PinchDetectorModule
 from pointer_engine import PointerEngineModule
 from pointer_stabilizer import PointerStabilizerModule
+from emotion_detection import EmotionDetectionModule
 
 class VisionManager:
     def __init__(self, camera_index=0, width=640, height=480, target_fps=30):
@@ -32,6 +33,7 @@ class VisionManager:
         self.face_mesh = FaceMeshModule()
         self.face_mesh_active = False
         self.face_intelligence = FaceIntelligenceModule()
+        self.emotion_detector = EmotionDetectionModule()
         self.hand_tracker = HandTrackingModule()
         self.hand_tracker_active = False
         self.gesture_recognizer = GestureRecognizerModule()
@@ -89,6 +91,7 @@ class VisionManager:
             t_det = 0.0
             t_mesh = 0.0
             t_intel = 0.0
+            t_emotion = 0.0
             t_hand = 0.0
             t_gesture = 0.0
             t_pinch = 0.0
@@ -117,6 +120,12 @@ class VisionManager:
                     start_intel = time.perf_counter()
                     faces = self.face_intelligence.calculate(faces)
                     t_intel = (time.perf_counter() - start_intel) * 1000.0
+
+                # 4.5. Emotion Intelligence Time
+                if len(faces) > 0:
+                    start_emotion = time.perf_counter()
+                    faces = self.emotion_detector.calculate(faces)
+                    t_emotion = (time.perf_counter() - start_emotion) * 1000.0
 
                 # 5. Hand Tracking Time
                 if self.hand_tracker_active:
@@ -198,6 +207,7 @@ class VisionManager:
                 "tFaceDetect": t_det,
                 "tFaceMesh": t_mesh,
                 "tFaceIntel": t_intel,
+                "tEmotionIntel": t_emotion,
                 "tHandTrack": t_hand,
                 "tGestureRec": t_gesture,
                 "tPinchDetect": t_pinch,

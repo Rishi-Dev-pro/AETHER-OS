@@ -43,12 +43,37 @@ export const validateVisionPayload = (payload) => {
   }
 
   // Array properties
-  const arrayProps = ["faces", "hands", "gestures", "pinches", "pose", "objects", "emotions", "ocr"];
+  const arrayProps = ["faces", "hands", "gestures", "pinches", "pose", "objects", "ocr"];
   arrayProps.forEach((prop) => {
     if (payload[prop] !== undefined && !Array.isArray(payload[prop])) {
       errors.push(`${prop} must be an array`);
     }
   });
+
+  // Face emotion validation
+  if (payload.faces && Array.isArray(payload.faces)) {
+    payload.faces.forEach((face, idx) => {
+      if (face.emotion !== undefined) {
+        if (typeof face.emotion !== "object" || face.emotion === null) {
+          errors.push(`faces[${idx}].emotion must be an object`);
+        } else {
+          const { dominant, confidence, scores, stability } = face.emotion;
+          if (dominant !== undefined && typeof dominant !== "string") {
+            errors.push(`faces[${idx}].emotion.dominant must be a string`);
+          }
+          if (confidence !== undefined && typeof confidence !== "number") {
+            errors.push(`faces[${idx}].emotion.confidence must be a number`);
+          }
+          if (scores !== undefined && (typeof scores !== "object" || scores === null)) {
+            errors.push(`faces[${idx}].emotion.scores must be an object`);
+          }
+          if (stability !== undefined && typeof stability !== "number") {
+            errors.push(`faces[${idx}].emotion.stability must be a number`);
+          }
+        }
+      }
+    });
+  }
 
   if (payload.warnings !== undefined && !Array.isArray(payload.warnings)) {
     errors.push("warnings must be an array");

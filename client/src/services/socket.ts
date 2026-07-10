@@ -130,6 +130,9 @@ const setupSocketListeners = (s: Socket) => {
 
       // Update pointer engine state
       const pointer = payload.pointer || { x: 0, y: 0, visible: false, pinching: false };
+      if (profile && typeof profile.tPythonStart === "number") {
+        pointer.timestamp = profile.tPythonStart;
+      }
       useCameraStore.getState().setPointer(pointer);
 
       if (profile) {
@@ -225,9 +228,11 @@ const setupSocketListeners = (s: Socket) => {
 
           // Get emotion
           let detectedEmotion = "None";
-          if (Array.isArray(payload.emotions) && payload.emotions.length > 0) {
-            const first = payload.emotions[0];
-            detectedEmotion = typeof first === "object" ? (first as any).label : first;
+          if (Array.isArray(payload.faces) && payload.faces.length > 0) {
+            const primaryFace = payload.faces[0];
+            if (primaryFace.emotion) {
+              detectedEmotion = primaryFace.emotion.dominant || "None";
+            }
           }
 
           useCameraStore.getState().updateDetectedItems({

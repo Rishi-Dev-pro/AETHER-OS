@@ -99,9 +99,11 @@ export const useVisionStore = create<VisionState>((set, get) => {
     updateVisionData: (data) =>
       set(() => {
         let detectedEmotion = "None";
-        if (data && Array.isArray(data.emotions) && data.emotions.length > 0) {
-          const first = data.emotions[0];
-          detectedEmotion = typeof first === "object" ? (first as any).label : first;
+        if (data && Array.isArray(data.faces) && data.faces.length > 0) {
+          const primaryFace = data.faces[0];
+          if (primaryFace.emotion) {
+            detectedEmotion = primaryFace.emotion.dominant || "None";
+          }
         }
 
         return {

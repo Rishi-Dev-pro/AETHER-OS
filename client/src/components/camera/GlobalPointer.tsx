@@ -1,136 +1,153 @@
-import { useEffect, useState } from "react";
-import { useInteractionStore } from "../../store/interactionStore";
+import { useRef } from "react";
+import { useCursorRenderer } from "./useCursorRenderer";
 
 /**
- * GlobalPointer Component
+ * GlobalPointer Component (Phase 6.0)
  *
  * Promotes the stabilized pointer to a global browser-level viewport overlay.
- * Renders fixed at the top of the interface, converting normalized coordinate telemetry
- * from the camera stream to window-relative pixels based on current screen dimensions.
+ * Renders fixed at the top of the interface, converting normalized coordinate
+ * telemetry from the camera stream to window-relative pixels.
+ *
+ * Phase 6.0 changes:
+ *   - Position updates driven by requestAnimationFrame (60fps interpolation)
+ *   - All DOM mutations happen via refs (no React re-render per frame)
+ *   - Visual state machine: idle / hover / press / pinchLock
+ *   - Hover magnetism toward interactive element centers (visual-only)
+ *
+ * Critical constraints preserved:
+ *   - Never writes to interactionStore or cameraStore
+ *   - Never modifies hit testing coordinates
+ *   - Pinch Lock logic remains in InteractionEngine (untouched)
  */
 export default function GlobalPointer() {
-  const pointer = useInteractionStore((state) => state.pointer);
+  const cursorRef = useRef<HTMLDivElement>(null);
 
-  // Monitor window dimensions dynamically for scale calculations
-  const [dimensions, setDimensions] = useState({
-    width: window.innerWidth,
-    height: window.innerHeight,
-  });
+  const {
+    outerRingRef,
+    ringRef,
+    dotRef,
+    tickRefs,
+    labelRef,
+  } = useCursorRenderer(cursorRef);
 
-  useEffect(() => {
-    const handleResize = () => {
-      setDimensions({
-        width: window.innerWidth,
-        height: window.innerHeight,
-      });
-    };
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
-  }, []);
-
-  if (!pointer || !pointer.visible) return null;
-
-  // Map normalized 0.0 - 1.0 to actual browser viewport boundaries
-  const px = pointer.x * dimensions.width;
-  const py = pointer.y * dimensions.height;
-
-  const isPinching = pointer.pinching;
-  
-  // Custom theme colors matching AETHER OS style: Cyan for hover, Red for pinch
-  const activeColor = isPinching ? "rgba(239, 68, 68, 0.95)" : "rgba(6, 182, 212, 0.95)";
-  const outerGlowColor = isPinching ? "rgba(239, 68, 68, 0.3)" : "rgba(6, 182, 212, 0.3)";
-  const size = isPinching ? 12 : 20;
+  // The entire visual state is driven by the rAF loop in useCursorRenderer.
+  // React only renders the static DOM skeleton once — all dynamic updates
+  // happen through direct style mutations on the refs below.
 
   return (
     <div
       className="fixed inset-0 pointer-events-none z-[9999] overflow-hidden"
       style={{ width: "100vw", height: "100vh" }}
     >
+      {/* Cursor Container — positioned by rAF loop via cursorRef */}
       <div
+        ref={cursorRef}
         className="absolute flex items-center justify-center"
         style={{
           left: 0,
           top: 0,
-          transform: `translate3d(${px}px, ${py}px, 0) translate(-50%, -50%)`,
+          willChange: "transform, opacity",
+          opacity: 0,
         }}
       >
-        {/* Outer dashed concentric ring */}
+        {/* Outer concentric ring */}
         <div
-          className="absolute rounded-full border border-dashed transition-all duration-200 ease-out"
+          ref={outerRingRef}
+          className="absolute rounded-full border transition-none"
           style={{
-            borderColor: activeColor,
-            width: `${size + 8}px`,
-            height: `${size + 8}px`,
-            transform: isPinching ? "scale(0.85)" : "scale(1)",
+            width: "38px",
+            height: "38px",
+            borderWidth: "1px",
+            borderStyle: "dashed",
+            borderColor: "rgba(6, 182, 212, 0.9)",
           }}
         />
 
-        {/* Glowing border ring */}
+        {/* Glowing inner ring */}
         <div
-          className="absolute rounded-full border-2 transition-all duration-200 ease-out"
+          ref={ringRef}
+          className="absolute rounded-full transition-none"
           style={{
-            borderColor: outerGlowColor,
-            width: `${size}px`,
-            height: `${size}px`,
-            boxShadow: `0 0 10px ${outerGlowColor}`,
+            width: "28px",
+            height: "28px",
+            borderWidth: "1.5px",
+            borderStyle: "solid",
+            borderColor: "rgba(6, 182, 212, 0.2)",
+            boxShadow: "0 0 10px rgba(6, 182, 212, 0.2)",
           }}
         />
 
-        {/* Central target core dot */}
+        {/* Central target dot */}
         <div
-          className="h-1.5 w-1.5 rounded-full transition-colors duration-200"
-          style={{ backgroundColor: activeColor }}
+          ref={dotRef}
+          className="rounded-full transition-none"
+          style={{
+            width: "6px",
+            height: "6px",
+            backgroundColor: "rgba(6, 182, 212, 0.9)",
+          }}
         />
 
-        {/* Concentric crosshair ticks */}
-        {/* Left */}
+        {/* Crosshair ticks — Left */}
         <div
-          className="absolute bg-current transition-all duration-200"
+          ref={(el) => { tickRefs.current[0] = el; }}
+          className="absolute transition-none"
           style={{
-            color: activeColor,
-            width: isPinching ? "4px" : "6px",
             height: "1px",
-            left: isPinching ? "-3px" : "-5px",
+            width: "7px",
+            left: "-9px",
+            top: "50%",
+            transform: "translateY(-50%)",
+            backgroundColor: "rgba(6, 182, 212, 0.9)",
           }}
         />
-        {/* Right */}
+        {/* Crosshair ticks — Right */}
         <div
-          className="absolute bg-current transition-all duration-200"
+          ref={(el) => { tickRefs.current[1] = el; }}
+          className="absolute transition-none"
           style={{
-            color: activeColor,
-            width: isPinching ? "4px" : "6px",
             height: "1px",
-            right: isPinching ? "-3px" : "-5px",
+            width: "7px",
+            right: "-9px",
+            top: "50%",
+            transform: "translateY(-50%)",
+            backgroundColor: "rgba(6, 182, 212, 0.9)",
           }}
         />
-        {/* Top */}
+        {/* Crosshair ticks — Top */}
         <div
-          className="absolute bg-current transition-all duration-200"
+          ref={(el) => { tickRefs.current[2] = el; }}
+          className="absolute transition-none"
           style={{
-            color: activeColor,
             width: "1px",
-            height: isPinching ? "4px" : "6px",
-            top: isPinching ? "-3px" : "-5px",
+            height: "7px",
+            top: "-9px",
+            left: "50%",
+            transform: "translateX(-50%)",
+            backgroundColor: "rgba(6, 182, 212, 0.9)",
           }}
         />
-        {/* Bottom */}
+        {/* Crosshair ticks — Bottom */}
         <div
-          className="absolute bg-current transition-all duration-200"
+          ref={(el) => { tickRefs.current[3] = el; }}
+          className="absolute transition-none"
           style={{
-            color: activeColor,
             width: "1px",
-            height: isPinching ? "4px" : "6px",
-            bottom: isPinching ? "-3px" : "-5px",
+            height: "7px",
+            bottom: "-9px",
+            left: "50%",
+            transform: "translateX(-50%)",
+            backgroundColor: "rgba(6, 182, 212, 0.9)",
           }}
         />
 
-        {/* Telemetry data label card */}
+        {/* Telemetry data label */}
         <div
-          className="absolute left-8 text-[8px] font-bold font-mono tracking-widest transition-colors duration-200 whitespace-nowrap bg-black/85 px-2 py-0.5 rounded border border-white/10 shadow-[0_4px_12px_rgba(0,0,0,0.5)]"
-          style={{ color: activeColor }}
+          ref={labelRef}
+          className="absolute left-12 text-[8px] font-bold font-mono tracking-widest whitespace-nowrap bg-black/85 px-2 py-0.5 rounded border border-white/10 shadow-[0_4px_12px_rgba(0,0,0,0.5)] transition-none"
+          style={{ color: "rgba(6, 182, 212, 0.9)" }}
         >
-          PTR: ({Math.round(pointer.x * 100)}, {Math.round(pointer.y * 100)})
-          {isPinching ? " [PINCH]" : ""}
+          PTR: (50, 50)
         </div>
       </div>
     </div>

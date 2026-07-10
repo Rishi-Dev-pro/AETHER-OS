@@ -16,7 +16,6 @@ class VisionPayload:
         self.pointer = pointer if pointer is not None else {"x": 0.0, "y": 0.0, "visible": False, "pinching": False}
         self.pose = []
         self.objects = []
-        self.emotions = []
         self.ocr = []
         
         self.status = status
@@ -37,7 +36,6 @@ class VisionPayload:
             "pointer": self.pointer,
             "pose": self.pose,
             "objects": self.objects,
-            "emotions": self.emotions,
             "ocr": self.ocr,
             "status": self.status,
             "warnings": self.warnings,

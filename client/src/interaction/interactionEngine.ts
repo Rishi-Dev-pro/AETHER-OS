@@ -20,6 +20,7 @@ class InteractionEngine {
   private prevRawX: number | null = null;
   private prevRawY: number | null = null;
   private lastTime = 0;
+  private lastTimeSource: "python" | "browser" | null = null;
 
   // Freeze coordinate buffer for Pinch Lock
   private freezeX = 0.5;
@@ -67,6 +68,7 @@ class InteractionEngine {
     this.prevRawX = null;
     this.prevRawY = null;
     this.lastTime = 0;
+    this.lastTimeSource = null;
 
     useInteractionStore.getState().clearInteractionState();
   }
@@ -86,9 +88,15 @@ class InteractionEngine {
       return;
     }
 
-    const now = performance.now();
-    const dt = Math.max(0.001, (now - this.lastTime) / 1000.0); // dt in seconds
-    this.lastTime = now;
+    const currentSource = typeof rawPointer.timestamp === "number" ? "python" : "browser";
+    const frameTime = rawPointer.timestamp ?? performance.now();
+    let dt = 0.0333; // Default 30 FPS pacing fallback
+    if (this.lastTime !== 0 && this.prevPointerVisible && this.lastTimeSource === currentSource) {
+      dt = (frameTime - this.lastTime) / 1000.0;
+    }
+    dt = Math.max(0.020, dt); // Floor at 20ms (50fps cap) to prevent velocity spikes
+    this.lastTime = frameTime;
+    this.lastTimeSource = currentSource;
 
     const store = useInteractionStore.getState();
     const config = store.config;

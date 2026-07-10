@@ -4,6 +4,13 @@ export interface FaceLandmark {
   z: number;
 }
 
+export interface VisionFaceEmotion {
+  dominant: string;
+  confidence: number;
+  scores: Record<string, number>;
+  stability: number;
+}
+
 export interface VisionFace {
   id: string | number;
   confidence: number;
@@ -14,6 +21,7 @@ export interface VisionFace {
     h: number;
   };
   emotions?: string[];
+  emotion?: VisionFaceEmotion;
   landmarks?: FaceLandmark[];
   eyes?: {
     leftOpen: boolean;
@@ -110,6 +118,7 @@ export interface VisionPointer {
   y: number;
   visible: boolean;
   pinching: boolean;
+  timestamp?: number;
   raw?: {
     x: number;
     y: number;
@@ -134,7 +143,7 @@ export interface VisionPayload {
   pointer?: VisionPointer;
   pose: VisionPose[];
   objects: VisionObject[];
-  emotions: VisionEmotion[];
+  emotions?: VisionEmotion[];
   ocr: VisionOCR[];
 
   status: string;

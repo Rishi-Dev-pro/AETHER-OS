@@ -24,7 +24,7 @@ class GestureRecognizerModule:
             [{"handId": hand_id, "gesture": gesture_name, "confidence": hand_confidence}]
         """
         gestures = []
-        for hand in hands:
+        for idx, hand in enumerate(hands):
             landmarks = hand.get("landmarks", [])
             if not landmarks or len(landmarks) < 21:
                 continue
@@ -39,11 +39,12 @@ class GestureRecognizerModule:
                     )
 
                 # Check extension for non-thumb fingers (Index, Middle, Ring, Pinky)
-                # Comparing tip-to-wrist distance vs pip-to-wrist distance
-                is_index_extended = dist3d(landmarks[8], landmarks[0]) > dist3d(landmarks[6], landmarks[0])
-                is_middle_extended = dist3d(landmarks[12], landmarks[0]) > dist3d(landmarks[10], landmarks[0])
-                is_ring_extended = dist3d(landmarks[16], landmarks[0]) > dist3d(landmarks[14], landmarks[0])
-                is_pinky_extended = dist3d(landmarks[20], landmarks[0]) > dist3d(landmarks[18], landmarks[0])
+                # Using rotation-invariant Segment-Sum Ratio test: straight line MCP->Tip vs segment-by-segment length sum.
+                # A finger is straight if the straight line is > 90% of the actual segment sum.
+                is_index_extended = dist3d(landmarks[8], landmarks[5]) > 0.90 * (dist3d(landmarks[6], landmarks[5]) + dist3d(landmarks[8], landmarks[6]))
+                is_middle_extended = dist3d(landmarks[12], landmarks[9]) > 0.90 * (dist3d(landmarks[10], landmarks[9]) + dist3d(landmarks[12], landmarks[10]))
+                is_ring_extended = dist3d(landmarks[16], landmarks[13]) > 0.90 * (dist3d(landmarks[14], landmarks[13]) + dist3d(landmarks[16], landmarks[14]))
+                is_pinky_extended = dist3d(landmarks[20], landmarks[17]) > 0.90 * (dist3d(landmarks[18], landmarks[17]) + dist3d(landmarks[20], landmarks[18]))
 
                 # Check thumb extension: distance between thumb tip (4) and middle MCP (9)
                 # compared to thumb IP (3) and middle MCP (9)
@@ -78,6 +79,8 @@ class GestureRecognizerModule:
                         "gesture": detected_gesture,
                         "confidence": hand["confidence"]
                     })
+
+
 
             except Exception as e:
                 # Graceful degradation - never let mathematical computation crash the loop
