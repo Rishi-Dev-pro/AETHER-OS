@@ -4,6 +4,8 @@ import { useSystemStore } from "../store/systemStore";
 import { useVisionStore } from "../store/visionStore";
 import { useCameraStore } from "../store/cameraStore";
 import { useVoiceStore } from "../store/voiceStore";
+import { cognitiveTrigger } from "./cognitiveTrigger";
+import { setSessionSocketId } from "../utils/sessionAccessor";
 
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || "http://localhost:5000";
 const IS_DEV = import.meta.env.DEV;
@@ -66,6 +68,7 @@ export const emitVoiceTelemetry = (data: any) => {
 const setupSocketListeners = (s: Socket) => {
   s.on("connect", () => {
     logDev("Socket connected. ID:", s.id);
+    setSessionSocketId(s.id || "");
     useSocketStore.getState().setSocketConnected(true);
 
     // Emit connection event and wait for server acknowledgment
@@ -83,6 +86,7 @@ const setupSocketListeners = (s: Socket) => {
 
   s.on("disconnect", (reason) => {
     logDev("Socket disconnected. Reason:", reason);
+    setSessionSocketId("");
     useSocketStore.getState().setSocketConnected(false);
     useSocketStore.getState().setBackendConnected(false);
     stopHeartbeat();
@@ -90,6 +94,7 @@ const setupSocketListeners = (s: Socket) => {
 
   s.on("connect_error", (error) => {
     logDev("Socket connection error:", error.message);
+    setSessionSocketId("");
     useSocketStore.getState().setSocketConnected(false);
     useSocketStore.getState().setBackendConnected(false);
   });
@@ -252,9 +257,11 @@ const setupSocketListeners = (s: Socket) => {
           });
         }
       }
+      cognitiveTrigger.notify("socket_update");
     } else {
       // Compatibility fallback
       useVisionStore.getState().updateVisionData(data);
+      cognitiveTrigger.notify("socket_update");
     }
   });
 

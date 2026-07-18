@@ -2,6 +2,7 @@ import { interactionRegistry } from "./interactionRegistry";
 import { performHitTest } from "./hitTesting";
 import { useInteractionStore } from "../store/interactionStore";
 import { useCameraStore } from "../store/cameraStore";
+import { cognitiveTrigger } from "../services/cognitiveTrigger";
 import type { PointerState, InteractionEventType, InteractionEvent } from "./interactionTypes";
 import type { VisionPointer } from "../types/vision";
 
@@ -205,6 +206,7 @@ class InteractionEngine {
       }
       store.setPressedId(hitElementId);
     } else if (pinchEnd) {
+      cognitiveTrigger.notify("pinch_release");
       if (this.currentPressedId) {
         this.emitEvent("pressend", this.currentPressedId, pointerState);
       }
@@ -212,6 +214,7 @@ class InteractionEngine {
       // Check if release occurred on the same element that was pressed
       if (hitElementId && hitElementId === this.pressStartElementId) {
         this.emitEvent("click", hitElementId, pointerState);
+        cognitiveTrigger.notify("click");
         
         // Dispatch synthetic click
         const element = elements.get(hitElementId);

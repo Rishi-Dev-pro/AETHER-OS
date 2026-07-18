@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useVoiceStore } from "../store/voiceStore";
 import { emitVoiceTelemetry } from "../services/socket";
+import { cognitiveTrigger } from "../services/cognitiveTrigger";
 
 export function useVoice() {
   const hasMicOwnership = useVoiceStore((state) => state.hasMicOwnership);
@@ -225,6 +226,7 @@ export function useVoice() {
             });
 
             if (isFinal) {
+              cognitiveTrigger.notify("speech_final");
               lastTranscriptRef.current = "";
             }
           }
