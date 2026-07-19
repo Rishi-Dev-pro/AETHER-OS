@@ -2,6 +2,7 @@ import { useCognitiveStore } from "../store/cognitiveStore";
 import { useIntentStore } from "../store/intentStore";
 import { intentClassifier } from "./intentClassifier";
 import { entityExtractor } from "./entityExtractor";
+import { IntentTriggerPolicy } from "./intentTriggerPolicy";
 import type { StructuredContext } from "../types/cognitive";
 import type { IntentResult } from "../types/intent";
 
@@ -47,6 +48,10 @@ class IntentManager {
   }
 
   private processContext(context: StructuredContext) {
+    if (!IntentTriggerPolicy.isActionable(context)) {
+      return;
+    }
+
     const currentTranscript = context.voice?.transcript ?? "";
     const currentIsFinal = context.voice?.isFinal ?? false;
 
