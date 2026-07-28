@@ -25,32 +25,10 @@ import {
 import { SystemError, ConfigurationError } from "./errors";
 
 // ============================================================================
-// 1. RUNTIME DEEP FREEZE HELPER (LOCAL)
+// 1. RUNTIME DEEP FREEZE HELPER (SHARED INTERNAL UTILITY)
 // ============================================================================
 
-/**
- * Recursively freezes an object and all nested properties to guarantee runtime immutability.
- */
-function deepFreeze<T>(obj: T): Readonly<T> {
-  if (obj === null || typeof obj !== "object") {
-    return obj;
-  }
-
-  Object.freeze(obj);
-
-  Object.getOwnPropertyNames(obj).forEach((prop) => {
-    const value = (obj as Record<string, unknown>)[prop];
-    if (
-      value !== null &&
-      (typeof value === "object" || typeof value === "function") &&
-      !Object.isFrozen(value)
-    ) {
-      deepFreeze(value);
-    }
-  });
-
-  return obj as Readonly<T>;
-}
+import { deepFreeze } from "./internal/deep-freeze";
 
 
 // ============================================================================
