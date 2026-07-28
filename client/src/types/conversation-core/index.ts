@@ -11,3 +11,4 @@ export * from "./types";
 export * from "./errors";
 export * from "./message-canonicalizer";
 export * from "./conversation-fsm";
+export * from "./context-trimmer";
