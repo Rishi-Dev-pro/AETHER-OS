@@ -83,8 +83,9 @@ export abstract class AIRuntimeError extends Error implements AIRuntimeErrorCont
     this.details = Object.freeze({ ...rawDetails });
 
     // Capture clean V8 stack trace if supported
-    if (Error.captureStackTrace) {
-      Error.captureStackTrace(this, this.constructor);
+    const errConstructor = Error as unknown as { captureStackTrace?: (target: object, constructorOpt?: Function) => void };
+    if (typeof errConstructor.captureStackTrace === "function") {
+      errConstructor.captureStackTrace(this, this.constructor);
     }
   }
 
