@@ -1,13 +1,13 @@
 /**
  * AETHER OS — Phase 9.6 Persistent Cognitive Layer (Memory System)
- * Milestone 2 Public API Barrel Update (`index.ts`)
+ * Milestone 3 Public API Barrel Update (`index.ts`)
  *
  * @file index.ts
  * @description Public API barrel exporting immutable contracts, factories, enums,
- * error taxonomies, validation rules, and mathematical ranking engines for Phase 9.6.
+ * error taxonomies, validation rules, ranking engine, memory store, index, and retrieval pipeline.
  *
  * @module @aether/memory-system
- * @version 1.1.0
+ * @version 1.2.0
  * @status APPROVED EDD COMPLIANT
  */
 
@@ -78,3 +78,22 @@ export {
   calculateCompositeScore,
   rankMemoryResults,
 } from "./memory-ranker";
+
+// Export Memory Store Abstractions (Milestone 3)
+export {
+  type IMemoryStore,
+  MemoryStore,
+} from "./memory-store";
+
+// Export Memory Index Abstractions (Milestone 3)
+export {
+  type MemoryIndexQueryFilter,
+  type IMemoryIndex,
+  MemoryIndex,
+} from "./memory-index";
+
+// Export Memory Retriever Pipeline (Milestone 3)
+export {
+  type IMemoryRetriever,
+  MemoryRetriever,
+} from "./memory-retriever";
