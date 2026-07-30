@@ -97,3 +97,10 @@ export {
   type IMemoryRetriever,
   MemoryRetriever,
 } from "./memory-retriever";
+
+// Export Memory Manager & Lifecycle Orchestrator (Milestone 4)
+export {
+  type IMemoryManager,
+  MemoryManager,
+} from "./memory-manager";
+
