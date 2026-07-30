@@ -14,7 +14,8 @@
 import { deepFreeze } from "../ai-runtime/internal/deep-freeze";
 import type { IMemoryManager } from "../memory-system/memory-manager";
 import type { MemoryEntry, MemorySearchResult } from "../memory-system/types";
-import { createMemoryEntry, createMemoryQuery } from "../memory-system/types";
+import { createMemoryQuery } from "../memory-system/types";
+
 import type { Conversation, ContextSnapshot } from "./types";
 
 /**
