@@ -29,11 +29,18 @@ import { MemoryNotFoundError } from "./errors";
  * Interface contract for the MemoryRetriever pipeline.
  */
 export interface IMemoryRetriever {
-  retrieveMemories(query: MemoryQuery): readonly MemorySearchResult[];
+  retrieveMemories(
+    query: MemoryQuery,
+    options?: {
+      readonly currentMs?: number;
+      readonly weights?: MemoryScoringWeights;
+    }
+  ): readonly MemorySearchResult[];
   retrieveMemoryById(id: string): Readonly<MemorySearchResult>;
   retrieveByTags(tags: readonly string[], limit?: number): readonly MemorySearchResult[];
   retrieveByType(type: MemoryType, limit?: number): readonly MemorySearchResult[];
 }
+
 
 /**
  * Canonical retrieval pipeline implementation.
