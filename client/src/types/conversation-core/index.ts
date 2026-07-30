@@ -14,3 +14,5 @@ export * from "./conversation-fsm";
 export * from "./context-trimmer";
 export * from "./session-manager";
 export * from "./turn-orchestrator";
+export * from "./memory-integration";
+

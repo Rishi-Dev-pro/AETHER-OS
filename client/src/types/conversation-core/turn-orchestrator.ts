@@ -36,6 +36,15 @@ import {
 } from "./message-canonicalizer";
 import { evaluateTransition } from "./conversation-fsm";
 import { trimConversation, type TrimConversationOptions } from "./context-trimmer";
+import {
+  evaluateAndCreateMemory,
+  retrieveMemoriesForContext,
+  reinforceContextMemories,
+  injectMemoriesIntoContextSnapshot,
+  type MemoryEnhancedContextSnapshot,
+} from "./memory-integration";
+import type { IMemoryManager } from "../memory-system/memory-manager";
+
 
 
 // ============================================================================
@@ -342,11 +351,16 @@ export function appendToolMessage(
  * @param options - Additional trimming options.
  * @returns Readonly<ContextSnapshot>.
  */
+export interface PrepareContextOptions extends TrimConversationOptions {
+  readonly memoryManager?: IMemoryManager;
+  readonly textQuery?: string;
+}
+
 export function prepareContext(
   conversationId: string,
   targetMaxTokens: number,
-  options: TrimConversationOptions = {}
-): Readonly<ContextSnapshot> {
+  options: PrepareContextOptions = {}
+): Readonly<ContextSnapshot | MemoryEnhancedContextSnapshot> {
   const conv = getConversation(conversationId);
 
   // Extract all messages across turns in chronological order
@@ -358,19 +372,41 @@ export function prepareContext(
   }
 
   // Invoke Milestone 2 Context Trimmer engine
-  return trimConversation(allMessages, targetMaxTokens, options);
+  const baseSnapshot = trimConversation(allMessages, targetMaxTokens, options);
+
+  // Determine query string for memory retrieval
+  let textQuery = options.textQuery;
+  if (!textQuery) {
+    const lastUserMsg = [...allMessages].reverse().find((m) => m.role === "USER");
+    if (lastUserMsg) {
+      textQuery = lastUserMsg.text;
+    }
+  }
+
+  if (textQuery) {
+    const retrievedMemories = retrieveMemoriesForContext(textQuery, options.memoryManager);
+    if (retrievedMemories.length > 0) {
+      reinforceContextMemories(retrievedMemories, options.memoryManager);
+      return injectMemoriesIntoContextSnapshot(baseSnapshot, retrievedMemories);
+    }
+  }
+
+  return baseSnapshot;
 }
 
 /**
  * Completes an active turn, transitions FSM state (WAITING -> ACTIVE -> IDLE), and seals the turn.
+ * Automatically evaluates deterministic long-term/episodic memory creation rules.
  *
  * @param conversationId - Target conversation identifier.
  * @param turnId - Active turn identifier.
+ * @param options - Optional orchestration settings including memoryManager reference.
  * @returns Object containing the completed turn and conversation.
  */
 export function completeTurn(
   conversationId: string,
-  turnId: string
+  turnId: string,
+  options?: { readonly memoryManager?: IMemoryManager }
 ): {
   readonly turn: Readonly<ConversationTurn>;
   readonly conversation: Readonly<Conversation>;
@@ -421,6 +457,9 @@ export function completeTurn(
   });
 
   conversationStore.set(conv.conversationId, updatedConv);
+
+  // Evaluate memory creation on conversation/turn completion
+  evaluateAndCreateMemory(updatedConv, options?.memoryManager);
 
   return deepFreeze({
     turn: completedTurn,
