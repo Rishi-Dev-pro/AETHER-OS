@@ -13,7 +13,6 @@
 
 import { deepFreeze } from "../ai-runtime/internal/deep-freeze";
 import {
-  createMemoryEntry,
   createMemorySnapshot,
   type MemoryEntry,
   type MemoryQuery,
@@ -29,7 +28,7 @@ import { clampScore, type MemoryScoringWeights } from "./memory-ranker";
 import { type IMemoryStore, MemoryStore } from "./memory-store";
 import { type IMemoryIndex, MemoryIndex } from "./memory-index";
 import { type IMemoryRetriever, MemoryRetriever } from "./memory-retriever";
-import { MemoryValidationError, MemoryNotFoundError } from "./errors";
+import { MemoryValidationError } from "./errors";
 
 /**
  * Interface contract for the MemoryManager orchestration layer.

@@ -13,7 +13,6 @@
 
 import { deepFreeze } from "../ai-runtime/internal/deep-freeze";
 import {
-  type MemoryEntry,
   type MemoryQuery,
   type MemorySearchResult,
   type MemoryType,
