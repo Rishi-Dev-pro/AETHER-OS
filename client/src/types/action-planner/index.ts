@@ -4,14 +4,15 @@
  *
  * @file index.ts
  * @description Single canonical entry point exporting all domain contracts, enums,
- * errors, and immutable factory constructors for `@aether/action-planner`.
+ * errors, factory constructors, and context normalizers for `@aether/action-planner`.
  *
  * @module @aether/action-planner
  * @version 1.0.0
- * @status FROZEN SPECIFICATION COMPLIANT — MILESTONE 1
+ * @status FROZEN SPECIFICATION COMPLIANT — MILESTONE 2
  */
 
 export * from "./enums";
 export * from "./errors";
 export * from "./contracts";
 export * from "./factories";
+export * from "./context-normalizer";
