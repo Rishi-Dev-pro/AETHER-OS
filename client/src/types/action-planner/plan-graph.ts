@@ -190,7 +190,13 @@ export function constructExecutionPlan(
     throw new InvalidCandidatePlanError("CandidatePlan must be a valid non-null object.");
   }
 
-  const planMetadata = metadata || createPlanMetadata({ planId: `plan_${candidatePlan.candidateId}` });
+  const planMetadata =
+    metadata ||
+    createPlanMetadata({
+      planId: `plan_${candidatePlan.candidateId}`,
+      sessionId: `sess_${candidatePlan.candidateId}`,
+      turnId: `turn_${candidatePlan.candidateId}`,
+    });
   const steps = candidatePlan.candidateSteps ? [...candidatePlan.candidateSteps] : [];
 
   // Compute topological execution stages and validate DAG invariants

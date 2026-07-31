@@ -5,11 +5,11 @@
  * @file index.ts
  * @description Single canonical entry point exporting all domain contracts, enums,
  * errors, factory constructors, context normalizers, plan resolvers, plan graph engines,
- * and plan safety engines for `@aether/action-planner`.
+ * plan safety engines, and action planner orchestrators for `@aether/action-planner`.
  *
  * @module @aether/action-planner
  * @version 1.0.0
- * @status FROZEN SPECIFICATION COMPLIANT — MILESTONE 5
+ * @status FROZEN SPECIFICATION COMPLIANT — MILESTONE 6
  */
 
 export * from "./enums";
@@ -20,3 +20,4 @@ export * from "./context-normalizer";
 export * from "./plan-resolver";
 export * from "./plan-graph";
 export * from "./plan-risk-engine";
+export * from "./action-planner-manager";
