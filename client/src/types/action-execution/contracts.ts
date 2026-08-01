@@ -26,10 +26,11 @@ import type {
   ExecutionStage,
   PlanPrecondition,
   PlanPostcondition,
+  PlanDependency,
 } from "../action-planner/contracts";
 
 // Re-export Phase 9.7 plan types for downstream convenience
-export type { ExecutionPlan, PlanStep, ExecutionStage, PlanPrecondition, PlanPostcondition };
+export type { ExecutionPlan, PlanStep, ExecutionStage, PlanPrecondition, PlanPostcondition, PlanDependency };
 
 // ============================================================================
 // 1. SECURED EXECUTION PLAN CONTRACT

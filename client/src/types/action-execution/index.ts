@@ -4,12 +4,12 @@
  *
  * @file index.ts
  * @description Single canonical entry point exporting all domain contracts, enums,
- * errors, factory constructors, ExecutionBoundaryValidator, and ExecutionRegistry
- * for `@aether/action-execution`.
+ * errors, factory constructors, ExecutionBoundaryValidator, ExecutionRegistry,
+ * Adapter Contracts, and ExecutionResolver for `@aether/action-execution`.
  *
  * @module @aether/action-execution
  * @version 1.0.0
- * @status FROZEN SPECIFICATION COMPLIANT — MILESTONE 2
+ * @status FROZEN SPECIFICATION COMPLIANT — MILESTONE 3
  */
 
 export * from "./enums";
@@ -20,3 +20,7 @@ export * from "./boundary-validator";
 export * from "./registry-errors";
 export * from "./registry-types";
 export * from "./execution-registry";
+export * from "./resolver-errors";
+export * from "./resolver-types";
+export * from "./adapter-contracts";
+export * from "./execution-resolver";
