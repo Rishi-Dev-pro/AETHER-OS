@@ -9,7 +9,7 @@
  *
  * @module @aether/action-execution
  * @version 1.0.0
- * @status FROZEN SPECIFICATION COMPLIANT — MILESTONE 5
+ * @status FROZEN SPECIFICATION COMPLIANT — MILESTONE 6
  */
 
 export * from "./enums";
@@ -36,5 +36,8 @@ export * from "./result-errors";
 export * from "./result-aggregator";
 export * from "./cleanup-manager";
 export * from "./result-validator";
+export * from "./execution-manager-types";
+export * from "./execution-manager";
+
 
 
