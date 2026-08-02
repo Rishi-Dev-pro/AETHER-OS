@@ -9,7 +9,7 @@
  *
  * @module @aether/action-execution
  * @version 1.0.0
- * @status FROZEN SPECIFICATION COMPLIANT — MILESTONE 3
+ * @status FROZEN SPECIFICATION COMPLIANT — MILESTONE 4
  */
 
 export * from "./enums";
@@ -24,3 +24,11 @@ export * from "./resolver-errors";
 export * from "./resolver-types";
 export * from "./adapter-contracts";
 export * from "./execution-resolver";
+export * from "./engine-types";
+export * from "./engine-errors";
+export * from "./lifecycle-controller";
+export * from "./stage-dispatcher";
+export * from "./worker-dispatcher";
+export * from "./timeout-manager";
+export * from "./execution-engine";
+
