@@ -1,16 +1,16 @@
 /**
  * AETHER OS — Phase 9.9 Provider Runtime Layer
- * Milestone 4: Canonical Barrel Export (`index.ts`)
+ * Milestone 5: Canonical Barrel Export (`index.ts`)
  *
  * @file index.ts
  * @description Single canonical entry point exporting all public domain contracts,
  * enums, exception classes, factory constructors, ProviderRegistry, CapabilityNegotiator,
  * CredentialVault, CredentialInjector, ProviderLifecycleManager, ProviderHealthManager,
- * and CircuitBreakerEngine for `@aether/provider-runtime`.
+ * CircuitBreakerEngine, ProviderSelector, and ProviderSessionManager for `@aether/provider-runtime`.
  *
  * @module @aether/provider-runtime
  * @version 1.1.0
- * @status FROZEN ARCHITECTURE SPECIFICATION — MILESTONE 4
+ * @status FROZEN ARCHITECTURE SPECIFICATION — MILESTONE 5
  */
 
 export * from "./enums";
@@ -32,3 +32,9 @@ export * from "./lifecycle-errors";
 export * from "./provider-lifecycle-manager";
 export * from "./provider-health-manager";
 export * from "./circuit-breaker-engine";
+export * from "./selector-types";
+export * from "./selector-errors";
+export * from "./provider-selector";
+export * from "./session-types";
+export * from "./session-errors";
+export * from "./provider-session-manager";
