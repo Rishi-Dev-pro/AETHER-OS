@@ -5,11 +5,12 @@
  * @file index.ts
  * @description Canonical barrel export defining public API for `@aether/provider-adapters`.
  * Re-exports enums, exception hierarchy, adapter types, contracts, capability utilities, factory constructors,
- * transport types, transport errors, request builder, response parser, retry policy, timeout controller, and HTTP client.
+ * transport types, transport errors, request builder, response parser, retry policy, timeout controller, HTTP client,
+ * authentication types, authentication errors, provider configurations, endpoint resolver, authentication manager, and request pipeline.
  *
  * @module @aether/provider-adapters
- * @version 1.1.0
- * @status FROZEN ARCHITECTURE SPECIFICATION — MILESTONE 2 — RELEASE
+ * @version 1.2.0
+ * @status FROZEN ARCHITECTURE SPECIFICATION — MILESTONE 3 — RELEASE
  */
 
 export * from "./enums";
@@ -25,3 +26,9 @@ export * from "./response-parser";
 export * from "./retry-policy";
 export * from "./timeout-controller";
 export * from "./http-client";
+export * from "./authentication-types";
+export * from "./authentication-errors";
+export * from "./provider-configuration";
+export * from "./endpoint-resolver";
+export * from "./authentication-manager";
+export * from "./request-pipeline";
