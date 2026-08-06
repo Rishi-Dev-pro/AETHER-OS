@@ -9,11 +9,12 @@
  * authentication types, authentication errors, provider configurations, endpoint resolver, authentication manager, request pipeline,
  * message types, translation errors, payload validator, request translator, response translator, usage calculator,
  * provider models, provider serializers, provider response parsers, provider base class, OpenAI adapter, Groq adapter,
- * NVIDIA adapter, Ollama adapter, adapter registry, and adapter manager.
+ * NVIDIA adapter, Ollama adapter, adapter registry, adapter manager, runtime types, runtime errors, provider diagnostics,
+ * runtime validation, unified adapter runtime, and runtime bootstrap.
  *
  * @module @aether/provider-adapters
- * @version 1.4.0
- * @status FROZEN ARCHITECTURE SPECIFICATION — MILESTONE 5 — RELEASE
+ * @version 1.5.0
+ * @status FROZEN ARCHITECTURE SPECIFICATION — MILESTONE 6 — RELEASE
  */
 
 export * from "./enums";
@@ -51,3 +52,9 @@ export * from "./nvidia-adapter";
 export * from "./ollama-adapter";
 export * from "./adapter-registry";
 export * from "./adapter-manager";
+export * from "./runtime-types";
+export * from "./runtime-errors";
+export * from "./provider-diagnostics";
+export * from "./runtime-validation";
+export * from "./unified-adapter-runtime";
+export * from "./runtime-bootstrap";
