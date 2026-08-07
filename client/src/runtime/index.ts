@@ -1,13 +1,13 @@
 /**
  * AETHER OS — Phase 9.11 AI Runtime Integration Layer
- * Milestone 1 Component: Barrel Export (`index.ts`)
+ * Milestone 2 Component: Barrel Export (`index.ts`)
  *
  * @file index.ts
  * @description Public API barrel export for Phase 9.11 Runtime Integration Layer.
  *
  * @module @aether/runtime
- * @version 1.0.0
- * @status FROZEN ARCHITECTURE SPECIFICATION — PHASE 9.11 MILESTONE 1
+ * @version 1.1.0
+ * @status FROZEN ARCHITECTURE SPECIFICATION — PHASE 9.11 MILESTONE 2
  */
 
 // Runtime Bootstrap Engine
@@ -83,3 +83,44 @@ export {
   EnvironmentValidationError,
   DuplicateCredentialBootstrapError,
 } from "./bootstrap-errors";
+
+// Milestone 2 — Conversation Runtime Engine & Components
+export { ConversationRuntime } from "./conversation/conversation-runtime";
+export { ExecutionCoordinator } from "./conversation/execution-coordinator";
+export { ExecutionQueue } from "./conversation/execution-queue";
+export { RuntimeEvents } from "./conversation/runtime-events";
+export { RuntimeDiagnostics as ConversationRuntimeDiagnostics } from "./conversation/runtime-diagnostics";
+export { ConversationState } from "./conversation/conversation-state";
+export { ConversationHistory } from "./conversation/conversation-history";
+
+export type {
+  ConversationRole,
+  ConversationMessage,
+  TurnStatus,
+  ConversationTurn,
+  ConversationStateSnapshot,
+  ConversationExport,
+  ExecutionResult,
+  QueueItemStatus,
+  QueueItem,
+  RuntimeEventType,
+  BaseRuntimeEvent,
+  ExecutionStartedEvent,
+  ProviderSelectedEvent,
+  RequestDispatchedEvent,
+  ResponseReceivedEvent,
+  ConversationUpdatedEvent,
+  ExecutionCompletedEvent,
+  ExecutionFailedEvent,
+  RuntimeEvent,
+  RuntimeDiagnosticsMetricsSnapshot,
+} from "./conversation/conversation-types";
+
+export {
+  ConversationRuntimeError,
+  ConversationStateError,
+  ConversationHistoryError,
+  ExecutionCoordinatorError,
+  ExecutionQueueError,
+  RuntimeEventError,
+} from "./conversation/conversation-errors";
