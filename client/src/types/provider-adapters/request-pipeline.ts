@@ -66,8 +66,10 @@ export async function buildPipelineRequest(
       rawCredentials: context.rawCredentials,
     });
 
-    // Stage 3: Merge Headers (Auth headers + extra headers)
+    // Stage 3: Merge Headers (Default JSON content-type & accept headers + Auth headers + extra headers)
     const mergedHeaders: Record<string, string> = {
+      "content-type": "application/json",
+      accept: "application/json",
       ...authPayload.headers,
     };
 
