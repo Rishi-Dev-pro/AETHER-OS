@@ -106,6 +106,62 @@ export class RuntimeController {
     }
   }
 
+  private activeStreamController: AbortController | null = null;
+
+  /**
+   * Sends user message prompt to active ConversationRuntime with real-time SSE token streaming.
+   */
+  public async sendStreamingMessage(
+    prompt: string,
+    providerId?: string,
+    modelId?: string
+  ): Promise<ExecutionResult> {
+    if (!hasRuntimeBridge()) {
+      await this.initialize();
+    }
+
+    if (this.activeStreamController) {
+      this.activeStreamController.abort();
+    }
+    this.activeStreamController = new AbortController();
+
+    const runtime = getConversationRuntime();
+    try {
+      const result = await runtime.sendStreamingMessage(
+        prompt,
+        providerId,
+        modelId,
+        this.activeStreamController.signal
+      );
+
+      this.activeStreamController = null;
+
+      // Auto-speak assistant response ONLY after stream completion
+      if (result && result.response && result.response.message && result.response.message.content) {
+        speakLatestAssistantMessage(result.response.message.content);
+      }
+
+      return result;
+    } catch (err: any) {
+      this.activeStreamController = null;
+      useConversationStore.getState().addError({
+        code: "STREAM_MESSAGE_ERROR",
+        message: err.message || "Failed to send streaming message",
+      });
+      throw err;
+    }
+  }
+
+  /**
+   * Cancels active streaming generation.
+   */
+  public cancelStreaming(): void {
+    if (this.activeStreamController) {
+      this.activeStreamController.abort("User cancelled generation");
+      this.activeStreamController = null;
+    }
+  }
+
   /**
    * Clears conversation history in store and runtime.
    */

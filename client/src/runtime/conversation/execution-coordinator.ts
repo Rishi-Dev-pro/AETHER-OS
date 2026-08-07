@@ -278,6 +278,311 @@ export class ExecutionCoordinator {
     }
   }
 
+  /**
+   * Executes a streaming prompt yielding incremental response deltas and emitting streaming events.
+   */
+  public async executeStreaming(
+    adapterId: string,
+    prompt: string,
+    modelId?: string,
+    signal?: AbortSignal,
+    onChunk?: (chunkText: string, accumulated: string) => void
+  ): Promise<Readonly<ExecutionResult>> {
+    const startTime = Date.now();
+    const executionId = `exec_str_${startTime}_${Math.random().toString(36).substring(2, 7)}`;
+    const conversationId = this.state.getConversationId();
+
+    this.events.emit({
+      eventId: `evt_${Date.now()}_start`,
+      type: "ExecutionStarted",
+      conversationId,
+      executionId,
+      prompt,
+      timestamp: Date.now(),
+    });
+
+    const userMessage = this.state.appendUserMessage(prompt);
+
+    this.events.emit({
+      eventId: `evt_${Date.now()}_msg_user`,
+      type: "ConversationUpdated",
+      conversationId,
+      message: userMessage,
+      totalMessages: this.state.getMessages().length,
+      timestamp: Date.now(),
+    });
+
+    const rawAdapter = adapterId || "groq-adapter";
+    const targetAdapter = rawAdapter.endsWith("-provider")
+      ? rawAdapter.replace("-provider", "-adapter")
+      : rawAdapter.endsWith("-adapter")
+      ? rawAdapter
+      : `${rawAdapter}-adapter`;
+
+    const targetProvider = targetAdapter.replace("-adapter", "-provider");
+    const targetModel = modelId || (targetAdapter === "nvidia-adapter" ? "nvidia/nvidia-nemotron-nano-9b-v2" : "llama-3.3-70b-versatile");
+
+    this.state.setProviderAndModel(targetProvider, targetModel);
+    this.diagnostics.setActiveProviderAndModel(targetProvider, targetModel);
+
+    this.events.emit({
+      eventId: `evt_${Date.now()}_prov`,
+      type: "ProviderSelected",
+      conversationId,
+      executionId,
+      providerId: targetAdapter,
+      modelId: targetModel,
+      timestamp: Date.now(),
+    });
+
+    this.events.emit({
+      eventId: `evt_${Date.now()}_str_start`,
+      type: "ExecutionStreamStarted",
+      conversationId,
+      executionId,
+      providerId: targetAdapter,
+      modelId: targetModel,
+      timestamp: Date.now(),
+    });
+
+    const canonicalMessages: CanonicalMessage[] = this.state.getMessages().map((m) => ({
+      id: m.id,
+      role: m.role as any,
+      content: m.content,
+      timestamp: m.timestamp,
+    }));
+
+    const translationRequest: TranslationRequest = {
+      requestId: `req_${executionId}`,
+      modelId: targetModel,
+      context: {
+        conversationId,
+        messages: canonicalMessages,
+      },
+      systemInstruction: this.state.getSystemPrompt(),
+    };
+
+    this.validateRequest(translationRequest);
+
+    this.events.emit({
+      eventId: `evt_${Date.now()}_req`,
+      type: "RequestDispatched",
+      conversationId,
+      executionId,
+      request: translationRequest,
+      timestamp: Date.now(),
+    });
+
+    const assistantMessage = this.state.appendAssistantMessage("");
+
+    let accumulatedContent = "";
+    let accumulatedReasoning = "";
+    let chunksCount = 0;
+    let finishReason: any = "stop";
+
+    try {
+      const chunkStream = (this.runtime as any).executeStreaming(
+        targetAdapter,
+        translationRequest,
+        undefined,
+        signal
+      );
+
+      for await (const chunk of chunkStream) {
+        if (signal?.aborted) {
+          throw new Error("Stream cancelled by user");
+        }
+
+        chunksCount++;
+        if (chunk.deltaContent) {
+          accumulatedContent += chunk.deltaContent;
+        }
+        if (chunk.deltaReasoning) {
+          accumulatedReasoning += chunk.deltaReasoning;
+        }
+        if (chunk.finishReason) {
+          finishReason = chunk.finishReason;
+        }
+
+        this.state.updateMessage(assistantMessage.id, { content: accumulatedContent });
+
+        this.events.emit({
+          eventId: `evt_${Date.now()}_chk_${chunksCount}`,
+          type: "ExecutionChunkReceived",
+          conversationId,
+          executionId,
+          chunk,
+          timestamp: Date.now(),
+        });
+
+        const currentLatencyMs = Date.now() - startTime;
+        const tokensProcessed = accumulatedContent.split(/\s+/).filter(Boolean).length;
+        const tokensPerSecond = currentLatencyMs > 0 ? (tokensProcessed / currentLatencyMs) * 1000 : 0;
+
+        this.events.emit({
+          eventId: `evt_${Date.now()}_rnd_${chunksCount}`,
+          type: "ExecutionChunkRendered",
+          conversationId,
+          executionId,
+          currentContent: accumulatedContent,
+          progress: Object.freeze({
+            chunksReceived: chunksCount,
+            tokensProcessed,
+            currentLatencyMs,
+            averageChunkLatencyMs: chunksCount > 0 ? Math.round(currentLatencyMs / chunksCount) : 0,
+            tokensPerSecond: parseFloat(tokensPerSecond.toFixed(2)),
+          }),
+          timestamp: Date.now(),
+        });
+
+        if (onChunk && chunk.deltaContent) {
+          onChunk(chunk.deltaContent, accumulatedContent);
+        }
+      }
+
+      const durationMs = Date.now() - startTime;
+      const promptTokens = prompt.split(/\s+/).filter(Boolean).length;
+      const completionTokens = accumulatedContent.split(/\s+/).filter(Boolean).length;
+
+      const usage = {
+        promptTokens,
+        completionTokens,
+        totalTokens: promptTokens + completionTokens,
+        estimatedCostUSD: (promptTokens + completionTokens) * 0.000001,
+      };
+
+      const response: TranslationResponse = {
+        responseId: `resp_${executionId}`,
+        requestId: translationRequest.requestId,
+        modelId: targetModel,
+        message: {
+          id: assistantMessage.id,
+          role: "assistant",
+          content: accumulatedContent,
+          reasoningContent: accumulatedReasoning || undefined,
+          timestamp: Date.now(),
+        },
+        finishReason,
+        usage,
+        timestamp: Date.now(),
+      };
+
+      this.events.emit({
+        eventId: `evt_${Date.now()}_str_complete`,
+        type: "ExecutionStreamCompleted",
+        conversationId,
+        executionId,
+        response: {
+          responseId: response.responseId,
+          requestId: response.requestId,
+          modelId: response.modelId,
+          fullContent: accumulatedContent,
+          reasoningContent: accumulatedReasoning || undefined,
+          finishReason,
+          usage,
+          timestamp: Date.now(),
+        },
+        timestamp: Date.now(),
+      });
+
+      const updatedAssistantMessage = { ...assistantMessage, content: accumulatedContent };
+      this.events.emit({
+        eventId: `evt_${Date.now()}_msg_ast`,
+        type: "ConversationUpdated",
+        conversationId,
+        message: updatedAssistantMessage,
+        totalMessages: this.state.getMessages().length,
+        timestamp: Date.now(),
+      });
+
+      const turn: ConversationTurn = {
+        turnId: `turn_${Date.now()}`,
+        userMessage,
+        assistantMessage: updatedAssistantMessage,
+        status: "COMPLETED",
+        providerId: targetAdapter,
+        modelId: targetModel,
+        timestamp: Date.now(),
+      };
+      this.history.addTurn(turn);
+
+      this.diagnostics.recordExecution(targetAdapter, targetModel, usage, durationMs, true);
+      this.diagnostics.setConversationMessageCount(this.state.getMessages().length);
+
+      const result: ExecutionResult = deepFreeze({
+        executionId,
+        conversationId,
+        response,
+        turn,
+        durationMs,
+        timestamp: Date.now(),
+      });
+
+      this.events.emit({
+        eventId: `evt_${Date.now()}_complete`,
+        type: "ExecutionCompleted",
+        conversationId,
+        executionId,
+        result,
+        timestamp: Date.now(),
+      });
+
+      return result;
+    } catch (err: any) {
+      const durationMs = Date.now() - startTime;
+      const errorMsg = err.message || "Streaming failed";
+      const isCancelled = signal?.aborted || errorMsg.includes("cancelled");
+
+      if (isCancelled) {
+        this.events.emit({
+          eventId: `evt_${Date.now()}_cancelled`,
+          type: "ExecutionStreamCancelled",
+          conversationId,
+          executionId,
+          reason: errorMsg,
+          timestamp: Date.now(),
+        });
+      } else {
+        this.events.emit({
+          eventId: `evt_${Date.now()}_str_failed`,
+          type: "ExecutionStreamFailed",
+          conversationId,
+          executionId,
+          error: errorMsg,
+          timestamp: Date.now(),
+        });
+      }
+
+      const failedTurn: ConversationTurn = {
+        turnId: `turn_${Date.now()}_failed`,
+        userMessage,
+        status: "FAILED",
+        providerId: targetAdapter,
+        modelId: targetModel,
+        timestamp: Date.now(),
+        error: errorMsg,
+      };
+      this.history.addTurn(failedTurn);
+
+      this.diagnostics.recordExecution(targetAdapter, targetModel, undefined, durationMs, false);
+
+      this.events.emit({
+        eventId: `evt_${Date.now()}_failed`,
+        type: "ExecutionFailed",
+        conversationId,
+        executionId,
+        error: errorMsg,
+        timestamp: Date.now(),
+      });
+
+      throw new ExecutionCoordinatorError(`AI Execution failed: ${errorMsg}`, {
+        originalError: errorMsg,
+        executionId,
+      });
+    }
+  }
+
+
   public createExecutionResult(
     executionId: string,
     conversationId: string,

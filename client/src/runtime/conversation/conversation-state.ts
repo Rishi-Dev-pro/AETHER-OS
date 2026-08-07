@@ -99,15 +99,11 @@ export class ConversationState {
     content: string,
     metadata?: Record<string, unknown>
   ): Readonly<ConversationMessage> {
-    if (!content || typeof content !== "string" || content.trim().length === 0) {
-      throw new ConversationStateError("Message content cannot be empty.");
-    }
-
     this.messageCounter++;
     const message: ConversationMessage = {
       id: `msg_${this.messageCounter}_${Date.now()}`,
       role,
-      content: content.trim(),
+      content: content ? content.trim() : "",
       timestamp: Date.now(),
       ...(metadata ? { metadata } : {}),
     };
@@ -117,10 +113,30 @@ export class ConversationState {
     return deepFreeze({ ...message });
   }
 
+  public updateMessage(
+    id: string,
+    update: Partial<ConversationMessage>
+  ): Readonly<ConversationMessage> | null {
+    const idx = this.messages.findIndex((m) => m.id === id);
+    if (idx === -1) return null;
+    const existing = this.messages[idx];
+    const updated = {
+      ...existing,
+      ...update,
+      timestamp: Date.now(),
+    };
+    this.messages[idx] = updated;
+    this.updatedAt = updated.timestamp;
+    return deepFreeze({ ...updated });
+  }
+
   public appendUserMessage(
     content: string,
     metadata?: Record<string, unknown>
   ): Readonly<ConversationMessage> {
+    if (!content || typeof content !== "string" || content.trim().length === 0) {
+      throw new ConversationStateError("Message content cannot be empty.");
+    }
     return this.appendMessage("user", content, metadata);
   }
 

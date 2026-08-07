@@ -100,11 +100,64 @@ export function bindRuntimeEvents(conversationRuntime: ConversationRuntime): () 
     }
   );
 
+  const subStreamStarted = conversationRuntime.subscribeToEvents<any>(
+    "ExecutionStreamStarted",
+    (_event) => {
+      const store = useConversationStore.getState();
+      store.setIsThinking(true);
+      store.setIsStreaming(true);
+    }
+  );
+
+  const subChunkRendered = conversationRuntime.subscribeToEvents<any>(
+    "ExecutionChunkRendered",
+    (event) => {
+      const store = useConversationStore.getState();
+      store.setStreamProgress(event.progress);
+
+      try {
+        const snapshot = conversationRuntime.snapshot();
+        const frontendMessages: ReadonlyArray<FrontendMessage> = snapshot.messages.map((m) => ({
+          id: m.id,
+          role: m.role,
+          content: m.content,
+          timestamp: m.timestamp,
+          providerId: snapshot.activeProvider,
+          modelId: snapshot.activeModel,
+          status: "PENDING",
+        }));
+        store.setMessages(frontendMessages);
+      } catch (err) {
+        console.error("Failed to sync streaming chunk snapshot:", err);
+      }
+    }
+  );
+
+  const subStreamCompleted = conversationRuntime.subscribeToEvents<any>(
+    "ExecutionStreamCompleted",
+    (_event) => {
+      const store = useConversationStore.getState();
+      store.setIsStreaming(false);
+      store.setStreamProgress(null);
+    }
+  );
+
+  const subStreamCancelled = conversationRuntime.subscribeToEvents<any>(
+    "ExecutionStreamCancelled",
+    (_event) => {
+      const store = useConversationStore.getState();
+      store.setIsThinking(false);
+      store.setIsStreaming(false);
+      store.setStreamProgress(null);
+    }
+  );
+
   const subCompleted = conversationRuntime.subscribeToEvents<ExecutionCompletedEvent>(
     "ExecutionCompleted",
     (event) => {
       const storeInstance = useConversationStore.getState();
       storeInstance.setIsThinking(false);
+      storeInstance.setIsStreaming(false);
 
       if (event.result) {
         storeInstance.updateMetrics({
@@ -119,6 +172,7 @@ export function bindRuntimeEvents(conversationRuntime: ConversationRuntime): () 
     (event) => {
       const storeInstance = useConversationStore.getState();
       storeInstance.setIsThinking(false);
+      storeInstance.setIsStreaming(false);
       storeInstance.addError({
         code: "EXECUTION_FAILED",
         message: event.error || "Execution failed",
@@ -132,7 +186,12 @@ export function bindRuntimeEvents(conversationRuntime: ConversationRuntime): () 
     conversationRuntime.unsubscribeFromEvents(subRequest);
     conversationRuntime.unsubscribeFromEvents(subResponse);
     conversationRuntime.unsubscribeFromEvents(subUpdated);
+    conversationRuntime.unsubscribeFromEvents(subStreamStarted);
+    conversationRuntime.unsubscribeFromEvents(subChunkRendered);
+    conversationRuntime.unsubscribeFromEvents(subStreamCompleted);
+    conversationRuntime.unsubscribeFromEvents(subStreamCancelled);
     conversationRuntime.unsubscribeFromEvents(subCompleted);
     conversationRuntime.unsubscribeFromEvents(subFailed);
   };
+
 }

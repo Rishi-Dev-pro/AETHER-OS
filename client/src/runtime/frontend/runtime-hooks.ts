@@ -22,6 +22,8 @@ export function useConversation() {
   const messages = useConversationStore((state) => state.messages);
   const isThinking = useConversationStore((state) => state.isThinking);
   const isSpeaking = useConversationStore((state) => state.isSpeaking);
+  const isStreaming = useConversationStore((state) => state.isStreaming);
+  const streamProgress = useConversationStore((state) => state.streamProgress);
   const errors = useConversationStore((state) => state.errors);
 
   const sendMessage = useCallback(
@@ -30,6 +32,17 @@ export function useConversation() {
     },
     []
   );
+
+  const sendStreamingMessage = useCallback(
+    (prompt: string, providerId?: string, modelId?: string) => {
+      return runtimeController.sendStreamingMessage(prompt, providerId, modelId);
+    },
+    []
+  );
+
+  const cancelStreaming = useCallback(() => {
+    runtimeController.cancelStreaming();
+  }, []);
 
   const clearConversation = useCallback(() => {
     runtimeController.clearConversation();
@@ -43,8 +56,12 @@ export function useConversation() {
     messages,
     isThinking,
     isSpeaking,
+    isStreaming,
+    streamProgress,
     errors,
     sendMessage,
+    sendStreamingMessage,
+    cancelStreaming,
     clearConversation,
     snapshot,
   };
@@ -56,6 +73,7 @@ export function useConversation() {
 export function useRuntime() {
   const runtimeReady = useConversationStore((state) => state.runtimeReady);
   const isThinking = useConversationStore((state) => state.isThinking);
+  const isStreaming = useConversationStore((state) => state.isStreaming);
 
   const status: FrontendRuntimeStatus = getFrontendRuntimeStatus();
 
@@ -71,11 +89,13 @@ export function useRuntime() {
     runtimeReady,
     status,
     currentQueueLength: status.currentQueueLength,
-    isExecuting: isThinking,
+    isExecuting: isThinking || isStreaming,
+    isStreaming,
     initialize,
     destroy,
   };
 }
+
 
 /**
  * Hook for consuming real-time execution diagnostics (latency, token usage breakdown, estimated cost).

@@ -61,6 +61,11 @@ export interface ConversationState {
   readonly messages: ReadonlyArray<FrontendMessage>;
   readonly isThinking: boolean;
   readonly isSpeaking: boolean;
+  readonly isStreaming: boolean;
+  readonly currentStreamingMessageId: string | null;
+  readonly streamProgress: import("../streaming/streaming-contracts").StreamingProgress | null;
+  readonly streamTokens: number;
+  readonly streamLatency: number;
   readonly currentProvider: string;
   readonly currentModel: string;
   readonly runtimeReady: boolean;
@@ -74,6 +79,8 @@ export interface ConversationState {
   readonly setRuntimeReady: (ready: boolean) => void;
   readonly setIsThinking: (thinking: boolean) => void;
   readonly setIsSpeaking: (speaking: boolean) => void;
+  readonly setIsStreaming: (isStreaming: boolean) => void;
+  readonly setStreamProgress: (progress: import("../streaming/streaming-contracts").StreamingProgress | null) => void;
   readonly setProviderAndModel: (provider: string, model: string) => void;
   readonly addMessage: (message: FrontendMessage) => void;
   readonly updateMessage: (id: string, update: Partial<FrontendMessage>) => void;
@@ -89,6 +96,7 @@ export interface ConversationState {
   readonly clearConversation: () => void;
 }
 
+
 const initialTokenUsage: TokenUsageMetrics = {
   promptTokens: 0,
   completionTokens: 0,
@@ -99,6 +107,11 @@ export const useConversationStore = create<ConversationState>((set) => ({
   messages: [],
   isThinking: false,
   isSpeaking: false,
+  isStreaming: false,
+  currentStreamingMessageId: null,
+  streamProgress: null,
+  streamTokens: 0,
+  streamLatency: 0,
   currentProvider: "groq-adapter",
   currentModel: "llama-3.3-70b-versatile",
   runtimeReady: false,
@@ -114,7 +127,17 @@ export const useConversationStore = create<ConversationState>((set) => ({
 
   setIsSpeaking: (speaking) => set({ isSpeaking: speaking }),
 
+  setIsStreaming: (isStreaming) => set({ isStreaming }),
+
+  setStreamProgress: (streamProgress) =>
+    set({
+      streamProgress,
+      streamTokens: streamProgress ? streamProgress.tokensProcessed : 0,
+      streamLatency: streamProgress ? streamProgress.currentLatencyMs : 0,
+    }),
+
   setProviderAndModel: (provider, model) =>
+
     set({
       currentProvider: provider,
       currentModel: model,

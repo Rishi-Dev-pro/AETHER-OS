@@ -166,8 +166,9 @@ describe("AETHER OS — Live Credential & Provider Execution Audit", () => {
 
     // Stage 7: ConversationRuntime
     const { runtime: adapterRuntime } = bootstrapRuntime();
-    await adapterRuntime.initialize();
-    adapterRuntime.registerCredential(credId, "groq-provider", "API_KEY" as any, { apiKey: targetKey });
+    if (!adapterRuntime.getVault().hasCredential(credId)) {
+      adapterRuntime.registerCredential(credId, "groq-provider", "API_KEY" as any, { apiKey: targetKey });
+    }
 
     // Spy on HttpClient.prototype.execute for stage 7 trace completion
     vi.spyOn(HttpClient.prototype, "execute").mockResolvedValue({

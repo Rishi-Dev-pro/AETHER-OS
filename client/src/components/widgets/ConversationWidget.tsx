@@ -5,12 +5,10 @@ import { setTTSEnabled, isTTSEnabled } from "../../runtime/frontend/speech-runti
 import { useState } from "react";
 
 export default function ConversationWidget() {
-  const { messages, isThinking, clearConversation } = useConversation();
+  const { messages, isThinking, isStreaming, streamProgress, cancelStreaming, clearConversation } = useConversation();
   const { runtimeReady, currentQueueLength } = useRuntime();
   const { latency, totalTokens, estimatedCost } = useDiagnostics();
   const { currentProvider, currentModel } = useProvider();
-
-
 
   const [ttsActive, setTtsActive] = useState<boolean>(() => isTTSEnabled());
   const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -19,7 +17,7 @@ export default function ConversationWidget() {
     if (messagesContainerRef.current) {
       messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
     }
-  }, [messages, isThinking]);
+  }, [messages, isThinking, isStreaming, streamProgress]);
 
   const toggleTts = () => {
     const next = !ttsActive;
@@ -75,6 +73,16 @@ export default function ConversationWidget() {
         </div>
 
         <div className="flex items-center gap-1.5">
+          {isStreaming && (
+            <button
+              onClick={cancelStreaming}
+              className="px-1.5 py-0.5 rounded-md border border-rose-500/30 bg-rose-500/20 text-rose-300 hover:bg-rose-500/30 transition-all font-mono text-[7px] uppercase tracking-wider animate-pulse"
+              title="Cancel Active Generation"
+            >
+              CANCEL
+            </button>
+          )}
+
           <button
             onClick={toggleTts}
             className={`p-1 rounded-md border transition-all text-[8px] ${
@@ -110,64 +118,72 @@ export default function ConversationWidget() {
         ref={messagesContainerRef}
         className="flex-1 overflow-y-auto pr-1 space-y-2 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent min-h-0"
       >
-        {messages.length === 0 && !isThinking ? (
+        {messages.length === 0 && !isThinking && !isStreaming ? (
           <div className="h-full flex flex-col items-center justify-center text-center p-2">
             <Sparkles size={16} className="text-purple-400/40 mb-1.5 animate-pulse" />
             <p className="text-[9px] font-mono text-slate-400 tracking-wider uppercase">
               NEURAL CONSOLE READY
             </p>
             <p className="text-[7px] font-mono text-slate-600 mt-0.5">
-              Speak or query to initiate runtime
+              Speak or query to initiate streaming runtime
             </p>
           </div>
         ) : (
-          messages.map((msg) => (
-            <div
-              key={msg.id}
-              className={`flex flex-col ${
-                msg.role === "user" ? "items-end" : "items-start"
-              } animate-fadeIn`}
-            >
-              <div
-                className={`flex items-center gap-1 mb-0.5 font-mono text-[7px] uppercase tracking-wider ${
-                  msg.role === "user" ? "text-pink-400" : "text-purple-400"
-                }`}
-              >
-                {msg.role === "user" ? (
-                  <>
-                    <span>USER</span>
-                    <User size={8} />
-                  </>
-                ) : (
-                  <>
-                    <Bot size={8} />
-                    <span>AETHER ({currentModel.split("/").pop()})</span>
-                  </>
-                )}
-              </div>
+          messages.map((msg, idx) => {
+            const isLatestAssistant =
+              msg.role === "assistant" && idx === messages.length - 1 && isStreaming;
 
+            return (
               <div
-                className={`p-2 rounded-lg text-[9px] leading-relaxed font-sans max-w-[92%] break-words shadow-sm border ${
-                  msg.role === "user"
-                    ? "bg-pink-500/10 border-pink-500/20 text-slate-200 rounded-tr-none"
-                    : "bg-purple-950/40 border-purple-500/20 text-slate-200 rounded-tl-none"
-                }`}
+                key={msg.id}
+                className={`flex flex-col ${
+                  msg.role === "user" ? "items-end" : "items-start"
+                } animate-fadeIn`}
               >
-                {msg.content}
+                <div
+                  className={`flex items-center gap-1 mb-0.5 font-mono text-[7px] uppercase tracking-wider ${
+                    msg.role === "user" ? "text-pink-400" : "text-purple-400"
+                  }`}
+                >
+                  {msg.role === "user" ? (
+                    <>
+                      <span>USER</span>
+                      <User size={8} />
+                    </>
+                  ) : (
+                    <>
+                      <Bot size={8} />
+                      <span>AETHER ({currentModel.split("/").pop()})</span>
+                    </>
+                  )}
+                </div>
+
+                <div
+                  className={`p-2 rounded-lg text-[9px] leading-relaxed font-sans max-w-[92%] break-words shadow-sm border ${
+                    msg.role === "user"
+                      ? "bg-pink-500/10 border-pink-500/20 text-slate-200 rounded-tr-none"
+                      : "bg-purple-950/40 border-purple-500/20 text-slate-200 rounded-tl-none"
+                  }`}
+                >
+                  {msg.content}
+                  {isLatestAssistant && (
+                    <span className="inline-block w-1.5 h-3 ml-0.5 bg-purple-400 animate-pulse align-middle" />
+                  )}
+                </div>
+                <span className="text-[6px] font-mono text-slate-600 mt-0.5">
+                  {new Date(msg.timestamp).toLocaleTimeString([], {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    second: "2-digit",
+                  })}
+                </span>
               </div>
-              <span className="text-[6px] font-mono text-slate-600 mt-0.5">
-                {new Date(msg.timestamp).toLocaleTimeString([], {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                  second: "2-digit",
-                })}
-              </span>
-            </div>
-          ))
+            );
+          })
         )}
 
-        {/* Thinking Indicator */}
-        {isThinking && (
+        {/* Thinking / Streaming Status Indicator */}
+        {isThinking && !isStreaming && (
           <div className="flex flex-col items-start animate-fadeIn">
             <div className="flex items-center gap-1 mb-0.5 font-mono text-[7px] uppercase tracking-wider text-purple-400">
               <Bot size={8} />
@@ -182,6 +198,7 @@ export default function ConversationWidget() {
           </div>
         )}
       </div>
+
 
 
       {/* Footer Diagnostics Telemetry */}

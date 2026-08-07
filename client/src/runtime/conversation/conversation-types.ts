@@ -105,6 +105,8 @@ export interface QueueItem {
 /**
  * Runtime Event Discriminated Union
  */
+import type { StreamingChunk, StreamingProgress, StreamingResponse } from "../streaming/streaming-contracts";
+
 export type RuntimeEventType =
   | "ExecutionStarted"
   | "ProviderSelected"
@@ -112,7 +114,14 @@ export type RuntimeEventType =
   | "ResponseReceived"
   | "ConversationUpdated"
   | "ExecutionCompleted"
-  | "ExecutionFailed";
+  | "ExecutionFailed"
+  | "ExecutionStreamStarted"
+  | "ExecutionChunkReceived"
+  | "ExecutionChunkRendered"
+  | "ExecutionStreamCompleted"
+  | "ExecutionStreamCancelled"
+  | "ExecutionStreamFailed"
+  | "ExecutionStreamTimeout";
 
 export interface BaseRuntimeEvent {
   readonly eventId: string;
@@ -164,6 +173,50 @@ export interface ExecutionFailedEvent extends BaseRuntimeEvent {
   readonly error: string;
 }
 
+export interface ExecutionStreamStartedEvent extends BaseRuntimeEvent {
+  readonly type: "ExecutionStreamStarted";
+  readonly executionId: string;
+  readonly providerId: string;
+  readonly modelId: string;
+}
+
+export interface ExecutionChunkReceivedEvent extends BaseRuntimeEvent {
+  readonly type: "ExecutionChunkReceived";
+  readonly executionId: string;
+  readonly chunk: StreamingChunk;
+}
+
+export interface ExecutionChunkRenderedEvent extends BaseRuntimeEvent {
+  readonly type: "ExecutionChunkRendered";
+  readonly executionId: string;
+  readonly currentContent: string;
+  readonly progress: StreamingProgress;
+}
+
+export interface ExecutionStreamCompletedEvent extends BaseRuntimeEvent {
+  readonly type: "ExecutionStreamCompleted";
+  readonly executionId: string;
+  readonly response: StreamingResponse;
+}
+
+export interface ExecutionStreamCancelledEvent extends BaseRuntimeEvent {
+  readonly type: "ExecutionStreamCancelled";
+  readonly executionId: string;
+  readonly reason: string;
+}
+
+export interface ExecutionStreamFailedEvent extends BaseRuntimeEvent {
+  readonly type: "ExecutionStreamFailed";
+  readonly executionId: string;
+  readonly error: string;
+}
+
+export interface ExecutionStreamTimeoutEvent extends BaseRuntimeEvent {
+  readonly type: "ExecutionStreamTimeout";
+  readonly executionId: string;
+  readonly timeoutMs: number;
+}
+
 export type RuntimeEvent =
   | ExecutionStartedEvent
   | ProviderSelectedEvent
@@ -171,7 +224,15 @@ export type RuntimeEvent =
   | ResponseReceivedEvent
   | ConversationUpdatedEvent
   | ExecutionCompletedEvent
-  | ExecutionFailedEvent;
+  | ExecutionFailedEvent
+  | ExecutionStreamStartedEvent
+  | ExecutionChunkReceivedEvent
+  | ExecutionChunkRenderedEvent
+  | ExecutionStreamCompletedEvent
+  | ExecutionStreamCancelledEvent
+  | ExecutionStreamFailedEvent
+  | ExecutionStreamTimeoutEvent;
+
 
 /**
  * Secret-free runtime diagnostics metrics snapshot.

@@ -101,6 +101,37 @@ export class ConversationRuntime {
     );
   }
 
+  /**
+   * Enqueues and executes a streaming prompt message yielding real-time chunks.
+   *
+   * @param prompt User prompt content.
+   * @param providerId Optional provider ID override.
+   * @param modelId Optional model ID override.
+   * @param signal Optional AbortSignal for stream cancellation.
+   * @param onChunk Optional callback invoked per token delta.
+   * @returns Promise resolving to execution result.
+   */
+  public async sendStreamingMessage(
+    prompt: string,
+    providerId?: string,
+    modelId?: string,
+    signal?: AbortSignal,
+    onChunk?: (chunkText: string, accumulated: string) => void
+  ): Promise<Readonly<ExecutionResult>> {
+    const rawProvider = providerId || this.state.getActiveProvider();
+    const targetAdapter = rawProvider.endsWith("-provider")
+      ? rawProvider.replace("-provider", "-adapter")
+      : rawProvider.endsWith("-adapter")
+      ? rawProvider
+      : `${rawProvider}-adapter`;
+    const targetModel = modelId || this.state.getActiveModel();
+
+    return this.queue.enqueue(prompt, targetAdapter, targetModel, () =>
+      this.coordinator.executeStreaming(targetAdapter, prompt, targetModel, signal, onChunk)
+    );
+  }
+
+
 
 
 
