@@ -88,13 +88,21 @@ export class ConversationRuntime {
     providerId?: string,
     modelId?: string
   ): Promise<Readonly<ExecutionResult>> {
-    const targetProvider = providerId || this.state.getActiveProvider();
+    const rawProvider = providerId || this.state.getActiveProvider();
+    const targetAdapter = rawProvider.endsWith("-provider")
+      ? rawProvider.replace("-provider", "-adapter")
+      : rawProvider.endsWith("-adapter")
+      ? rawProvider
+      : `${rawProvider}-adapter`;
     const targetModel = modelId || this.state.getActiveModel();
 
-    return this.queue.enqueue(prompt, targetProvider, targetModel, () =>
-      this.coordinator.execute(targetProvider, prompt, targetModel)
+    return this.queue.enqueue(prompt, targetAdapter, targetModel, () =>
+      this.coordinator.execute(targetAdapter, prompt, targetModel)
     );
   }
+
+
+
 
   /**
    * Clears active conversation state, history, and queue.

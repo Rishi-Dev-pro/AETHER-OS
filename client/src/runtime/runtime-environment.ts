@@ -97,14 +97,29 @@ export function readRuntimeEnvironment(
       ? (globalThis as any).process.env
       : {};
 
-  const envSource = customEnv ?? globalEnv;
+  const viteEnv =
+    typeof import.meta !== "undefined" && (import.meta as any).env
+      ? (import.meta as any).env
+      : {};
+
+  const envSource = customEnv ?? { ...globalEnv, ...viteEnv };
+
+  const getEnvVal = (key: string): string | undefined => {
+    const direct = envSource[key];
+    if (direct) return direct;
+    const viteKey = `VITE_${key}`;
+    const viteVal = envSource[viteKey];
+    if (viteVal) return viteVal;
+    return undefined;
+  };
 
   return Object.freeze({
-    GROQ_API_KEY: envSource[PROVIDER_ENV_KEYS.GROQ]?.trim() || undefined,
-    NVIDIA_API_KEY: envSource[PROVIDER_ENV_KEYS.NVIDIA]?.trim() || undefined,
-    OPENAI_API_KEY: envSource[PROVIDER_ENV_KEYS.OPENAI]?.trim() || undefined,
+    GROQ_API_KEY: getEnvVal(PROVIDER_ENV_KEYS.GROQ)?.trim() || undefined,
+    NVIDIA_API_KEY: getEnvVal(PROVIDER_ENV_KEYS.NVIDIA)?.trim() || undefined,
+    OPENAI_API_KEY: getEnvVal(PROVIDER_ENV_KEYS.OPENAI)?.trim() || undefined,
   });
 }
+
 
 /**
  * Validates formatting of present environment variable credentials fail-fast.

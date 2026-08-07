@@ -6,6 +6,7 @@ import { interactionEngine } from "../interaction/interactionEngine";
 import { snapshotManager } from "../services/snapshotManager";
 import { intentManager } from "../services/intentManager";
 import { promptManager } from "../services/promptManager";
+import { runtimeController } from "../runtime/frontend";
 
 export default function App() {
   useSocket();
@@ -16,11 +17,16 @@ export default function App() {
     snapshotManager.initialize();
     intentManager.initialize();
     promptManager.initialize();
+    runtimeController.initialize().catch((err) => {
+      console.error("Failed to initialize AI runtime controller:", err);
+    });
+
     return () => {
       interactionEngine.shutdown();
       snapshotManager.shutdown();
       intentManager.shutdown();
       promptManager.shutdown();
+      runtimeController.destroy();
     };
   }, []);
 

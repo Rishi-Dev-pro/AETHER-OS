@@ -134,6 +134,8 @@ export const useConversationStore = create<ConversationState>((set) => ({
 
   setMessages: (messages) => set({ messages: [...messages] }),
 
+
+
   updateMetrics: (metrics) =>
     set((state) => {
       const nextLatency = metrics.lastLatency ?? state.lastLatency;

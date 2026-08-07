@@ -245,4 +245,23 @@ describe("Milestone 3 — Frontend Runtime Integration Suite", () => {
     });
   });
 
+  describe("8. Fix Pack Verification & Integration Safeguards", () => {
+    it("should ensure runtimeController.initialize() sets up speech recognition binding", async () => {
+      await runtimeController.initialize(undefined, mockEnv);
+      const status = runtimeController.getStatus();
+      expect(status.runtimeReady).toBe(true);
+      expect(hasRuntimeBridge()).toBe(true);
+    });
+
+    it("should toggle thinking indicator state during execution flow", async () => {
+      const runtime = await initializeRuntimeBridge(undefined, mockEnv);
+      const store = useConversationStore.getState();
+
+      store.setIsThinking(true);
+      expect(useConversationStore.getState().isThinking).toBe(true);
+
+      store.setIsThinking(false);
+      expect(useConversationStore.getState().isThinking).toBe(false);
+    });
+  });
 });

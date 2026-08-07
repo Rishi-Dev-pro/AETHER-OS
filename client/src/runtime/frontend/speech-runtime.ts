@@ -67,6 +67,8 @@ export function bindSpeechRecognition(runtime: ConversationRuntime): () => void 
           });
         });
       }
+
+
     }
   });
 

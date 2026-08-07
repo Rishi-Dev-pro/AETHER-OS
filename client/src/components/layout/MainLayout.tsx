@@ -8,6 +8,7 @@ import SystemWidget from "../widgets/SystemWidget";
 import VisionWidget from "../widgets/VisionWidget";
 import StatsWidget from "../widgets/StatsWidget";
 import ThoughtWidget from "../widgets/ThoughtWidget";
+import ConversationWidget from "../widgets/ConversationWidget";
 import GlobalPointer from "../camera/GlobalPointer";
 
 export default function MainLayout() {
@@ -43,6 +44,12 @@ export default function MainLayout() {
         <div className="absolute left-[52px] xl:left-[72px] bottom-[112px] xl:bottom-[124px] z-40 transition-all duration-300 hover:scale-[1.01]">
           <StatsWidget />
         </div>
+
+        {/* Right HUD Column Stack: Live Conversation Neural Interface */}
+        <div className="absolute right-[52px] xl:right-[72px] bottom-[310px] xl:bottom-[335px] z-40 transition-all duration-300 hover:scale-[1.01]">
+          <ConversationWidget />
+        </div>
+
 
         {/* Bottom Right: Event logs feed */}
         <div className="absolute right-[52px] xl:right-[72px] bottom-[112px] xl:bottom-[124px] z-40 transition-all duration-300 hover:scale-[1.01]">

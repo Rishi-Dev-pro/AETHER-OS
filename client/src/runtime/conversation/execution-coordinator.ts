@@ -103,12 +103,19 @@ export class ExecutionCoordinator {
       timestamp: Date.now(),
     });
 
-    // 4. Determine provider and model
-    const targetAdapter = adapterId || "groq-adapter";
+    // 4. Determine canonical adapter and provider IDs
+    const rawAdapter = adapterId || "groq-adapter";
+    const targetAdapter = rawAdapter.endsWith("-provider")
+      ? rawAdapter.replace("-provider", "-adapter")
+      : rawAdapter.endsWith("-adapter")
+      ? rawAdapter
+      : `${rawAdapter}-adapter`;
+
+    const targetProvider = targetAdapter.replace("-adapter", "-provider");
     const targetModel = modelId || (targetAdapter === "nvidia-adapter" ? "nvidia/nvidia-nemotron-nano-9b-v2" : "llama-3.3-70b-versatile");
 
-    this.state.setProviderAndModel(targetAdapter.replace("-adapter", "-provider"), targetModel);
-    this.diagnostics.setActiveProviderAndModel(targetAdapter.replace("-adapter", "-provider"), targetModel);
+    this.state.setProviderAndModel(targetProvider, targetModel);
+    this.diagnostics.setActiveProviderAndModel(targetProvider, targetModel);
 
     // 5. Emit ProviderSelected event
     this.events.emit({
@@ -120,6 +127,7 @@ export class ExecutionCoordinator {
       modelId: targetModel,
       timestamp: Date.now(),
     });
+
 
     // 6. Build TranslationRequest with canonical conversation context
     const canonicalMessages: CanonicalMessage[] = this.state.getMessages().map((m) => {
@@ -158,6 +166,7 @@ export class ExecutionCoordinator {
       // 8. Execute request through UnifiedAdapterRuntime
       const response: TranslationResponse = await this.runtime.execute(targetAdapter, translationRequest);
       const durationMs = Date.now() - startTime;
+
 
       // 9. Emit ResponseReceived event
       this.events.emit({
@@ -228,6 +237,7 @@ export class ExecutionCoordinator {
       return result;
     } catch (err: any) {
       const durationMs = Date.now() - startTime;
+
       const errorMsg = err.message || "Execution failed";
 
       // Create Failed Turn and Record in History

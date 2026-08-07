@@ -76,6 +76,8 @@ export function bindRuntimeEvents(conversationRuntime: ConversationRuntime): () 
     "ConversationUpdated",
     (_event) => {
       // Sync messages from runtime state snapshot
+
+
       try {
         const snapshot = conversationRuntime.snapshot();
         const frontendMessages: ReadonlyArray<FrontendMessage> = snapshot.messages.map((m) => ({
