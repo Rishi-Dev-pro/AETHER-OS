@@ -1,23 +1,49 @@
 /**
- * AETHER OS — Phase 9.10 AI Provider Adapter Layer
- * Unit Tests: Runtime Environment Reader (`runtime-environment.test.ts`)
+ * AETHER OS — Phase 9.11 AI Runtime Integration Layer
+ * Unit Tests: Runtime Environment (`runtime-environment.test.ts`)
  */
 
 import { describe, it, expect } from "vitest";
-import { readRuntimeEnvironment, PROVIDER_ENV_KEYS } from "../runtime-environment";
+import {
+  validateEnvironment,
+  validateProvider,
+  validateCredentials,
+  validateConfiguration,
+  RuntimeEnvironmentError,
+} from "../index";
 
-describe("Phase 9.10 Milestone 7 Runtime Environment Reader Unit Tests", () => {
-  it("should read and trim API keys from custom environment dictionary", () => {
-    const custom = {
-      [PROVIDER_ENV_KEYS.GROQ]: "  gsk_trimmed_key_123  ",
-      [PROVIDER_ENV_KEYS.NVIDIA]: "nvapi-trimmed_key_456",
+describe("Phase 9.11 Milestone 1 Runtime Environment Unit Tests", () => {
+  it("should validate Groq and NVIDIA configured environment without secret leakage", () => {
+    const env = {
+      GROQ_API_KEY: "gsk_env_test_groq_key",
+      NVIDIA_API_KEY: "nvapi-env_test_nvidia_key",
     };
 
-    const env = readRuntimeEnvironment(custom);
+    const report = validateEnvironment(env);
 
-    expect(env.GROQ_API_KEY).toBe("gsk_trimmed_key_123");
-    expect(env.NVIDIA_API_KEY).toBe("nvapi-trimmed_key_456");
-    expect(env.OPENAI_API_KEY).toBeUndefined();
-    expect(Object.isFrozen(env)).toBe(true);
+    expect(report.isEnvironmentValid).toBe(true);
+    expect(report.credentials.groqStatus).toBe("Configured");
+    expect(report.credentials.nvidiaStatus).toBe("Configured");
+    expect(report.credentials.openaiStatus).toBe("Optional");
+    expect(report.credentials.ollamaStatus).toBe("Configured");
+
+    const groqProv = validateProvider("groq-provider", env);
+    expect(groqProv.status).toBe("Configured");
+    expect(groqProv.isReady).toBe(true);
+    expect(groqProv.requiresAuth).toBe(true);
+
+    const openaiProv = validateProvider("openai-provider", env);
+    expect(openaiProv.status).toBe("Optional");
+    expect(openaiProv.isReady).toBe(false);
+
+    expect(Object.isFrozen(report)).toBe(true);
+  });
+
+  it("should throw RuntimeEnvironmentError on illegal whitespace or line breaks in key", () => {
+    const env = {
+      GROQ_API_KEY: "gsk_illegal_key\nwith_newline",
+    };
+
+    expect(() => validateConfiguration(env)).toThrow(RuntimeEnvironmentError);
   });
 });

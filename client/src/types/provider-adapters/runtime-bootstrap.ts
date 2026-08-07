@@ -7,8 +7,8 @@
  * into a production-ready UnifiedAdapterRuntime instance, including secure environment credential loading.
  *
  * @module @aether/provider-adapters/runtime-bootstrap
- * @version 1.1.0
- * @status FROZEN ARCHITECTURE SPECIFICATION — MILESTONE 7
+ * @version 1.1.1
+ * @status FROZEN ARCHITECTURE SPECIFICATION — MILESTONE 7 FIX PACK
  */
 
 import { ProviderManager, CredentialVault } from "../provider-runtime";
@@ -40,7 +40,7 @@ export function bootstrapRuntime(
 }> {
   const vault = new CredentialVault();
   const adapterManager = new AdapterManager();
-  const providerManager = new ProviderManager();
+  const providerManager = new ProviderManager(undefined, vault);
 
   const autoRegister = config?.autoRegisterDefaultAdapters ?? true;
 
