@@ -123,4 +123,5 @@ export {
   ExecutionCoordinatorError,
   ExecutionQueueError,
   RuntimeEventError,
-} from "./conversation/conversation-errors";
+} from "./conversation/conversation-errors";// Milestone 3 — Frontend Runtime Integration Layer
+export * from "./frontend";
