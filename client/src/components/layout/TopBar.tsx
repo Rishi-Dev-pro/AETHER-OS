@@ -6,6 +6,7 @@ import {
   ScanEye,
   Wifi,
   Clock3,
+  Terminal,
 } from "lucide-react";
 import { useCameraStore } from "../../store/cameraStore";
 import { useVoiceStore } from "../../store/voiceStore";
@@ -13,7 +14,11 @@ import { useSystemStore } from "../../store/systemStore";
 import { useVisionStore } from "../../store/visionStore";
 import { useSocketStore } from "../../store/socketStore";
 
-export default function TopBar() {
+interface TopBarProps {
+  onToggleDevTools?: () => void;
+}
+
+export default function TopBar({ onToggleDevTools }: TopBarProps = {}) {
   const isCameraEnabled = useCameraStore((state) => state?.isCameraEnabled ?? false);
   const voiceStatus = useVoiceStore((state) => state?.voiceStatus ?? "ONLINE");
   const visionMode = useVisionStore((state) => state?.visionMode ?? "standard");
@@ -145,6 +150,15 @@ export default function TopBar() {
           label="System Time"
           value={timeStr}
         />
+
+        <button
+          onClick={onToggleDevTools}
+          title="Toggle Runtime DevTools (Ctrl+Shift+D)"
+          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-cyan-500/30 bg-cyan-950/30 hover:bg-cyan-500/20 text-cyan-300 transition-all shadow-[0_0_10px_rgba(6,182,212,0.2)] hover:scale-105"
+        >
+          <Terminal size={14} className="text-cyan-400" />
+          <span className="text-[10px] font-bold tracking-widest font-mono">DEVTOOLS</span>
+        </button>
       </div>
     </header>
   );

@@ -30,6 +30,8 @@ export default function ConversationWidget() {
   const sessions = useConversationStore((state) => state.sessions);
   const activeSessionId = useConversationStore((state) => state.activeSessionId);
   const activeSessionTitle = useConversationStore((state) => state.activeSessionTitle);
+  const isOffline = useConversationStore((state) => state.isOffline);
+  const resilienceNotification = useConversationStore((state) => state.resilienceNotification);
 
   const [ttsActive, setTtsActive] = useState<boolean>(() => isTTSEnabled());
   const [showSessionDrawer, setShowSessionDrawer] = useState(false);
@@ -211,13 +213,29 @@ export default function ConversationWidget() {
 
           <div
             className={`h-1.5 w-1.5 rounded-full ${
-              runtimeReady
+              isOffline
+                ? "bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.5)]"
+                : runtimeReady
                 ? "bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.5)] animate-pulse"
                 : "bg-amber-500"
             }`}
+            title={isOffline ? "Offline" : runtimeReady ? "Runtime Ready" : "Initializing"}
           />
         </div>
       </div>
+
+      {/* Resilience / Offline Notification Banner */}
+      {(isOffline || resilienceNotification) && (
+        <div
+          className={`mb-1 px-2 py-0.5 rounded text-[8px] font-mono flex items-center justify-between border shrink-0 ${
+            isOffline
+              ? "border-rose-500/30 bg-rose-500/10 text-rose-300"
+              : "border-amber-500/30 bg-amber-500/10 text-amber-300 animate-pulse"
+          }`}
+        >
+          <span className="truncate">{isOffline ? "⚠ OFFLINE — REQUESTS PAUSED" : resilienceNotification}</span>
+        </div>
+      )}
 
       {/* Session Drawer Overlay */}
       {showSessionDrawer && (

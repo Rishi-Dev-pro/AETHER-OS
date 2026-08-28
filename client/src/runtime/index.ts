@@ -125,3 +125,15 @@ export {
   RuntimeEventError,
 } from "./conversation/conversation-errors";// Milestone 3 — Frontend Runtime Integration Layer
 export * from "./frontend";
+
+// Milestone 6 — Runtime Resilience & Recovery Layer
+export * from "./resilience/resilience-types";
+export * from "./resilience/resilience-errors";
+export { ResilienceCoordinator, resilienceCoordinator } from "./resilience/resilience-coordinator";
+export { offlineDetector, OfflineDetector } from "./resilience/offline-detector";
+export { withTimeout, createTimeoutSignal } from "./resilience/timeout-controller";
+
+// Milestone 7 — Production Runtime Dashboard & Developer Tools
+export * from "./devtools/devtools-types";
+export { DevToolsService, devToolsService } from "./devtools/devtools-service";
+

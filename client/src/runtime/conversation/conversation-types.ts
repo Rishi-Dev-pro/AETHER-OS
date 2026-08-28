@@ -126,7 +126,14 @@ export type RuntimeEventType =
   | "SessionSwitched"
   | "SessionDeleted"
   | "SessionRenamed"
-  | "ContextPruned";
+  | "ContextPruned"
+  | "RetryScheduled"
+  | "RetryStarted"
+  | "ProviderFailover"
+  | "ExecutionTimeout"
+  | "CircuitBreakerChanged"
+  | "OfflineDetected"
+  | "OnlineRecovered";
 
 export interface BaseRuntimeEvent {
   readonly eventId: string;
@@ -252,6 +259,48 @@ export interface ContextPrunedEvent extends BaseRuntimeEvent {
   readonly estimatedTokens: number;
 }
 
+export interface RetryScheduledEvent extends BaseRuntimeEvent {
+  readonly type: "RetryScheduled";
+  readonly executionId: string;
+  readonly attempt: number;
+  readonly delayMs: number;
+  readonly reason: string;
+}
+
+export interface RetryStartedEvent extends BaseRuntimeEvent {
+  readonly type: "RetryStarted";
+  readonly executionId: string;
+  readonly attempt: number;
+}
+
+export interface ProviderFailoverEvent extends BaseRuntimeEvent {
+  readonly type: "ProviderFailover";
+  readonly executionId: string;
+  readonly fromProvider: string;
+  readonly toProvider: string;
+  readonly reason: string;
+}
+
+export interface ExecutionTimeoutEvent extends BaseRuntimeEvent {
+  readonly type: "ExecutionTimeout";
+  readonly executionId: string;
+  readonly timeoutMs: number;
+}
+
+export interface CircuitBreakerChangedEvent extends BaseRuntimeEvent {
+  readonly type: "CircuitBreakerChanged";
+  readonly providerId: string;
+  readonly state: string;
+}
+
+export interface OfflineDetectedEvent extends BaseRuntimeEvent {
+  readonly type: "OfflineDetected";
+}
+
+export interface OnlineRecoveredEvent extends BaseRuntimeEvent {
+  readonly type: "OnlineRecovered";
+}
+
 export type RuntimeEvent =
   | ExecutionStartedEvent
   | ProviderSelectedEvent
@@ -271,7 +320,14 @@ export type RuntimeEvent =
   | SessionSwitchedEvent
   | SessionDeletedEvent
   | SessionRenamedEvent
-  | ContextPrunedEvent;
+  | ContextPrunedEvent
+  | RetryScheduledEvent
+  | RetryStartedEvent
+  | ProviderFailoverEvent
+  | ExecutionTimeoutEvent
+  | CircuitBreakerChangedEvent
+  | OfflineDetectedEvent
+  | OnlineRecoveredEvent;
 
 
 /**

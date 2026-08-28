@@ -19,6 +19,9 @@ import type { RuntimeEvents } from "./runtime-events";
 import type { RuntimeDiagnostics } from "./runtime-diagnostics";
 import type { ExecutionResult, ConversationTurn } from "./conversation-types";
 import { ExecutionCoordinatorError } from "./conversation-errors";
+import { ResilienceCoordinator, resilienceCoordinator } from "../resilience/resilience-coordinator";
+import { offlineDetector } from "../resilience/offline-detector";
+import { OfflineError, ExecutionTimeoutError } from "../resilience/resilience-errors";
 
 /**
  * Helper to deeply freeze objects recursively.
@@ -46,7 +49,8 @@ export class ExecutionCoordinator {
     private readonly state: ConversationState,
     private readonly history: ConversationHistory,
     private readonly events: RuntimeEvents,
-    private readonly diagnostics: RuntimeDiagnostics
+    private readonly diagnostics: RuntimeDiagnostics,
+    private readonly resilience: ResilienceCoordinator = resilienceCoordinator
   ) {}
 
   /**
@@ -212,10 +216,65 @@ export class ExecutionCoordinator {
     });
 
     try {
-      // 8. Execute request through UnifiedAdapterRuntime
-      const response: TranslationResponse = await this.runtime.execute(targetAdapter, translationRequest);
-      const durationMs = Date.now() - startTime;
+      // 8. Execute request through ResilienceCoordinator
+      const resilienceResult = await this.resilience.executeWithResilience<TranslationResponse>({
+        adapterId: targetAdapter,
+        modelId: targetModel,
+        executeFn: async (activeAdapter, activeModel) => {
+          const req: TranslationRequest = {
+            ...translationRequest,
+            modelId: activeModel,
+          };
+          return this.runtime.execute(activeAdapter, req);
+        },
+        onRetry: (attempt, delayMs, reason) => {
+          this.events.emit({
+            eventId: `evt_${Date.now()}_retry`,
+            type: "RetryScheduled",
+            conversationId,
+            executionId,
+            attempt,
+            delayMs,
+            reason,
+            timestamp: Date.now(),
+          });
+        },
+        onFailover: (fromAdapter, toAdapter, reason) => {
+          this.events.emit({
+            eventId: `evt_${Date.now()}_failover`,
+            type: "ProviderFailover",
+            conversationId,
+            executionId,
+            fromProvider: fromAdapter,
+            toProvider: toAdapter,
+            reason,
+            timestamp: Date.now(),
+          });
+          const newTargetProvider = toAdapter.replace("-adapter", "-provider");
+          const newModel = toAdapter.includes("nvidia")
+            ? "nvidia/nvidia-nemotron-nano-9b-v2"
+            : toAdapter.includes("openai")
+            ? "gpt-4o"
+            : "llama-3.3-70b-versatile";
+          this.state.setProviderAndModel(newTargetProvider, newModel);
+          this.diagnostics.setActiveProviderAndModel(newTargetProvider, newModel);
+        },
+        onCircuitChange: (provId, state) => {
+          this.events.emit({
+            eventId: `evt_${Date.now()}_cb`,
+            type: "CircuitBreakerChanged",
+            conversationId,
+            providerId: provId,
+            state,
+            timestamp: Date.now(),
+          });
+        },
+      });
 
+      const response: TranslationResponse = resilienceResult.result;
+      const finalAdapter = resilienceResult.resolvedProvider;
+      const finalModel = resilienceResult.resolvedModel;
+      const durationMs = Date.now() - startTime;
 
       // 9. Emit ResponseReceived event
       this.events.emit({
@@ -247,16 +306,16 @@ export class ExecutionCoordinator {
         userMessage,
         assistantMessage,
         status: "COMPLETED",
-        providerId: targetAdapter,
-        modelId: targetModel,
+        providerId: finalAdapter,
+        modelId: finalModel,
         timestamp: Date.now(),
       };
       this.history.addTurn(turn);
 
       // 13. Record Diagnostics
       this.diagnostics.recordExecution(
-        targetAdapter,
-        targetModel,
+        finalAdapter,
+        finalModel,
         response.usage,
         durationMs,
         true
@@ -361,16 +420,63 @@ export class ExecutionCoordinator {
       timestamp: Date.now(),
     });
 
+    // 1. Offline fast-fail check
+    if (!offlineDetector.isOnline()) {
+      this.events.emit({
+        eventId: `evt_${Date.now()}_offline`,
+        type: "OfflineDetected",
+        conversationId,
+        timestamp: Date.now(),
+      });
+      throw new OfflineError();
+    }
+
     const rawAdapter = adapterId || "groq-adapter";
-    const targetAdapter = rawAdapter.endsWith("-provider")
+    let targetAdapter = rawAdapter.endsWith("-provider")
       ? rawAdapter.replace("-provider", "-adapter")
       : rawAdapter.endsWith("-adapter")
       ? rawAdapter
       : `${rawAdapter}-adapter`;
 
-    const targetProvider = targetAdapter.replace("-adapter", "-provider");
-    const targetModel = modelId || (targetAdapter === "nvidia-adapter" ? "nvidia/nvidia-nemotron-nano-9b-v2" : "llama-3.3-70b-versatile");
+    let targetModel = modelId || (targetAdapter === "nvidia-adapter" ? "nvidia/nvidia-nemotron-nano-9b-v2" : "llama-3.3-70b-versatile");
 
+    // Circuit breaker check for streaming
+    const cb = this.resilience.getCircuitBreakerEngine();
+    if (!cb.canExecute(targetAdapter)) {
+      this.events.emit({
+        eventId: `evt_${Date.now()}_cb_open`,
+        type: "CircuitBreakerChanged",
+        conversationId,
+        providerId: targetAdapter,
+        state: "OPEN",
+        timestamp: Date.now(),
+      });
+
+      const fallbacks = ["groq-adapter", "nvidia-adapter", "openai-adapter", "ollama-adapter"].filter(
+        (a) => a !== targetAdapter
+      );
+      const eligibleFallback = fallbacks.find((a) => cb.canExecute(a));
+      if (eligibleFallback) {
+        this.events.emit({
+          eventId: `evt_${Date.now()}_failover`,
+          type: "ProviderFailover",
+          conversationId,
+          executionId,
+          fromProvider: targetAdapter,
+          toProvider: eligibleFallback,
+          reason: `Circuit breaker OPEN for ${targetAdapter}`,
+          timestamp: Date.now(),
+        });
+        targetAdapter = eligibleFallback;
+        targetModel = targetAdapter.includes("nvidia")
+          ? "nvidia/nvidia-nemotron-nano-9b-v2"
+          : targetAdapter.includes("openai")
+          ? "gpt-4o"
+          : "llama-3.3-70b-versatile";
+      }
+    }
+
+    const targetProvider = targetAdapter.replace("-adapter", "-provider");
     this.state.setProviderAndModel(targetProvider, targetModel);
     this.diagnostics.setActiveProviderAndModel(targetProvider, targetModel);
 
@@ -575,6 +681,17 @@ export class ExecutionCoordinator {
           timestamp: Date.now(),
         });
       } else {
+        this.resilience.getCircuitBreakerEngine().recordFailure(targetAdapter);
+        if (err instanceof ExecutionTimeoutError || err.name === "ExecutionTimeoutError") {
+          this.events.emit({
+            eventId: `evt_${Date.now()}_str_timeout`,
+            type: "ExecutionStreamTimeout",
+            conversationId,
+            executionId,
+            timeoutMs: 60000,
+            timestamp: Date.now(),
+          });
+        }
         this.events.emit({
           eventId: `evt_${Date.now()}_str_failed`,
           type: "ExecutionStreamFailed",

@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import TopBar from "./TopBar";
 import BottomDock from "./BottomDock";
 import CameraViewport from "../camera/CameraViewport";
@@ -10,8 +11,32 @@ import StatsWidget from "../widgets/StatsWidget";
 import ThoughtWidget from "../widgets/ThoughtWidget";
 import ConversationWidget from "../widgets/ConversationWidget";
 import GlobalPointer from "../camera/GlobalPointer";
+import { RuntimeDevTools } from "../devtools/RuntimeDevTools";
 
 export default function MainLayout() {
+  const [isDevToolsOpen, setIsDevToolsOpen] = useState(false);
+
+  // Global keyboard shortcut: Ctrl+Shift+D or backtick (`) to toggle DevTools
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey && e.shiftKey && e.key.toLowerCase() === "d") || (e.key === "`" && !e.ctrlKey && !e.altKey && !e.metaKey)) {
+        // Only trigger on backtick if not actively focused in an input/textarea
+        const target = e.target as HTMLElement;
+        if (e.key === "`" && target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) {
+          return;
+        }
+        e.preventDefault();
+        setIsDevToolsOpen((prev) => !prev);
+      }
+      if (e.key === "Escape" && isDevToolsOpen) {
+        setIsDevToolsOpen(false);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isDevToolsOpen]);
+
   return (
     <div className="relative w-screen h-screen overflow-y-auto bg-[#030407] select-none">
       {/* Background decorations */}
@@ -20,7 +45,7 @@ export default function MainLayout() {
       <GridBackground />
 
       {/* Top Header (Absolute positioned HUD status bar) */}
-      <TopBar />
+      <TopBar onToggleDevTools={() => setIsDevToolsOpen((prev) => !prev)} />
 
       {/* Main Operating Area (Determinstic absolute layout) */}
       <main className="absolute inset-0 z-10">
@@ -50,7 +75,6 @@ export default function MainLayout() {
           <ConversationWidget />
         </div>
 
-
         {/* Bottom Right: Event logs feed */}
         <div className="absolute right-[52px] xl:right-[72px] bottom-[112px] xl:bottom-[124px] z-40 transition-all duration-300 hover:scale-[1.01]">
           <ThoughtWidget />
@@ -62,6 +86,9 @@ export default function MainLayout() {
 
       {/* Global Spatial Cursor Overlay */}
       <GlobalPointer />
+
+      {/* Runtime DevTools Dashboard Modal */}
+      <RuntimeDevTools isOpen={isDevToolsOpen} onClose={() => setIsDevToolsOpen(false)} />
     </div>
   );
 }

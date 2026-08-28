@@ -219,6 +219,54 @@ export function bindRuntimeEvents(conversationRuntime: ConversationRuntime): () 
     }
   );
 
+  // Resilience & Recovery event subscriptions
+  const subRetry = conversationRuntime.subscribeToEvents<any>(
+    "RetryScheduled",
+    (event) => {
+      const store = useConversationStore.getState();
+      store.setResilienceNotification(`Auto-retrying (Attempt ${event.attempt})... ${event.reason || ""}`);
+    }
+  );
+
+  const subFailover = conversationRuntime.subscribeToEvents<any>(
+    "ProviderFailover",
+    (event) => {
+      const store = useConversationStore.getState();
+      store.setResilienceNotification(`Provider failover: ${event.fromProvider} → ${event.toProvider}`);
+      store.setProviderAndModel(event.toProvider, "");
+    }
+  );
+
+  const subTimeout = conversationRuntime.subscribeToEvents<any>(
+    "ExecutionTimeout",
+    (_event) => {
+      const store = useConversationStore.getState();
+      store.setIsThinking(false);
+      store.setIsStreaming(false);
+      store.setResilienceNotification("Execution timed out. Recovering...");
+    }
+  );
+
+  const subOffline = conversationRuntime.subscribeToEvents<any>(
+    "OfflineDetected",
+    (_event) => {
+      const store = useConversationStore.getState();
+      store.setIsOffline(true);
+      store.setIsThinking(false);
+      store.setIsStreaming(false);
+      store.setResilienceNotification("Network offline");
+    }
+  );
+
+  const subOnline = conversationRuntime.subscribeToEvents<any>(
+    "OnlineRecovered",
+    (_event) => {
+      const store = useConversationStore.getState();
+      store.setIsOffline(false);
+      store.setResilienceNotification(null);
+    }
+  );
+
   return () => {
     conversationRuntime.unsubscribeFromEvents(subStarted);
     conversationRuntime.unsubscribeFromEvents(subProvider);
@@ -235,5 +283,10 @@ export function bindRuntimeEvents(conversationRuntime: ConversationRuntime): () 
     conversationRuntime.unsubscribeFromEvents(subSessionSwitched);
     conversationRuntime.unsubscribeFromEvents(subSessionRenamed);
     conversationRuntime.unsubscribeFromEvents(subSessionDeleted);
+    conversationRuntime.unsubscribeFromEvents(subRetry);
+    conversationRuntime.unsubscribeFromEvents(subFailover);
+    conversationRuntime.unsubscribeFromEvents(subTimeout);
+    conversationRuntime.unsubscribeFromEvents(subOffline);
+    conversationRuntime.unsubscribeFromEvents(subOnline);
   };
 }

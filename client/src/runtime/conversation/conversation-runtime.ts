@@ -31,7 +31,10 @@ import type {
   RuntimeDiagnosticsMetricsSnapshot,
   RuntimeEvent,
   RuntimeEventType,
+  ConversationTurn,
 } from "./conversation-types";
+
+import { ResilienceCoordinator, resilienceCoordinator } from "../resilience/resilience-coordinator";
 
 /**
  * Public conversation runtime façade managing end-to-end AI conversation lifecycles and sessions.
@@ -42,6 +45,7 @@ export class ConversationRuntime {
   private readonly queue: ExecutionQueue;
   private readonly events: RuntimeEvents;
   private readonly diagnosticsMetrics: RuntimeDiagnostics;
+  private readonly resilience: ResilienceCoordinator;
   private coordinator: ExecutionCoordinator;
 
   constructor(
@@ -49,13 +53,15 @@ export class ConversationRuntime {
     systemPrompt?: string,
     providerId?: string,
     modelId?: string,
-    sessionManagerOverride?: SessionManager
+    sessionManagerOverride?: SessionManager,
+    resilienceOverride?: ResilienceCoordinator
   ) {
     this.adapterRuntime = runtimeOverride ?? getRuntime().runtime;
     this.sessionManager = sessionManagerOverride ?? new SessionManager();
     this.queue = new ExecutionQueue();
     this.events = new RuntimeEvents();
     this.diagnosticsMetrics = new RuntimeDiagnostics();
+    this.resilience = resilienceOverride ?? resilienceCoordinator;
 
     // Create or initialize default session
     this.sessionManager.createSession({
@@ -74,7 +80,8 @@ export class ConversationRuntime {
       this.sessionManager.getActiveState(),
       this.sessionManager.getActiveHistory(),
       this.events,
-      this.diagnosticsMetrics
+      this.diagnosticsMetrics,
+      this.resilience
     );
   }
 
@@ -371,6 +378,20 @@ export class ConversationRuntime {
   }
 
   /**
+   * Returns current turn history for active session.
+   */
+  public history(): ReadonlyArray<ConversationTurn> {
+    return this.sessionManager.getActiveHistory().listTurns();
+  }
+
+  /**
+   * Returns current execution queue snapshot.
+   */
+  public getQueueSnapshot(): ReadonlyArray<import("./conversation-types").QueueItem> {
+    return this.queue.snapshot();
+  }
+
+  /**
    * Subscribes to runtime events.
    */
   public subscribeToEvents<T extends RuntimeEvent = RuntimeEvent>(
@@ -392,5 +413,31 @@ export class ConversationRuntime {
    */
   public eventHistory(): ReadonlyArray<RuntimeEvent> {
     return this.events.createSnapshot();
+  }
+
+  /**
+   * Access underlying ResilienceCoordinator.
+   */
+  public getResilienceCoordinator(): ResilienceCoordinator {
+    return this.resilience;
+  }
+
+  /**
+   * Retrieves current resilience metrics snapshot.
+   */
+  public getResilienceMetrics(): import("../resilience/resilience-types").ResilienceMetricsSnapshot {
+    return this.resilience.getMetrics();
+  }
+
+  /**
+   * Performs controlled runtime self-healing recovery:
+   * 1. Clears pending execution queue items
+   * 2. Resets transient resilience metrics
+   * 3. Rebuilds coordinator for active session
+   */
+  public async recover(): Promise<void> {
+    this.queue.clear();
+    this.resilience.reset();
+    this.coordinator = this.buildCoordinator();
   }
 }

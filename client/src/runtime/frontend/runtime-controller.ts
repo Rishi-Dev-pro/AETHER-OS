@@ -37,6 +37,8 @@ export interface DiagnosticsData {
   readonly model: string;
 }
 
+import { devToolsService } from "../devtools/devtools-service";
+
 export class RuntimeController {
   private static instance: RuntimeController | null = null;
   private unbindSpeech: (() => void) | null = null;
@@ -69,6 +71,9 @@ export class RuntimeController {
       providerId,
       modelId
     );
+
+    // Bind DevTools service
+    devToolsService.bindRuntime(runtime);
 
     // Bind speech recognition trigger auto-sending
     if (this.unbindSpeech) {
@@ -326,6 +331,33 @@ export class RuntimeController {
   }
 
   /**
+   * Performs runtime self-healing recovery:
+   * 1. Cancels any active streaming
+   * 2. Clears execution queues and resets coordinator
+   * 3. Clears transient errors from store
+   */
+  public async recover(): Promise<void> {
+    this.cancelStreaming();
+    if (hasRuntimeBridge()) {
+      const runtime = getConversationRuntime();
+      await runtime.recover();
+    }
+    useConversationStore.getState().clearErrors();
+    useConversationStore.getState().setIsThinking(false);
+    useConversationStore.getState().setResilienceNotification(null);
+  }
+
+  /**
+   * Retrieves resilience metrics snapshot.
+   */
+  public getResilienceMetrics(): import("../resilience/resilience-types").ResilienceMetricsSnapshot | null {
+    if (hasRuntimeBridge()) {
+      return getConversationRuntime().getResilienceMetrics();
+    }
+    return null;
+  }
+
+  /**
    * Destroys runtime bridge and speech bindings cleanly.
    */
   public destroy(): void {
@@ -333,6 +365,7 @@ export class RuntimeController {
       this.unbindSpeech();
       this.unbindSpeech = null;
     }
+    devToolsService.unbindRuntime();
     cancelSpeech();
     resetRuntimeBridge();
   }

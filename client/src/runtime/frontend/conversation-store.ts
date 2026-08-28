@@ -81,8 +81,14 @@ export interface ConversationState {
   readonly activeSessionId: string;
   readonly activeSessionTitle: string;
 
+  // Resilience & Network State
+  readonly isOffline: boolean;
+  readonly resilienceNotification: string | null;
+
   // Actions / Mutators
   readonly setRuntimeReady: (ready: boolean) => void;
+  readonly setIsOffline: (offline: boolean) => void;
+  readonly setResilienceNotification: (notif: string | null) => void;
   readonly setIsThinking: (thinking: boolean) => void;
   readonly setIsSpeaking: (speaking: boolean) => void;
   readonly setIsStreaming: (isStreaming: boolean) => void;
@@ -132,12 +138,20 @@ export const useConversationStore = create<ConversationState>((set) => ({
   errors: [],
   snapshots: [],
 
+  // Resilience & Network defaults
+  isOffline: false,
+  resilienceNotification: null,
+
   // Multi-session defaults
   sessions: [],
   activeSessionId: "",
   activeSessionTitle: "New Conversation",
 
   setRuntimeReady: (ready) => set({ runtimeReady: ready }),
+
+  setIsOffline: (isOffline) => set({ isOffline }),
+
+  setResilienceNotification: (resilienceNotification) => set({ resilienceNotification }),
 
   setIsThinking: (thinking) => set({ isThinking: thinking }),
 
