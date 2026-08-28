@@ -229,6 +229,8 @@ export function useVoice() {
               cognitiveTrigger.notify("speech_final");
               lastTranscriptRef.current = "";
             }
+
+
           }
         };
 

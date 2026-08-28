@@ -38,12 +38,16 @@ export class AdapterManager {
    * Fetches a registered adapter by ID or throws if not found.
    */
   public getAdapter(adapterId: string): ProviderAdapter {
-    const adapter = this.registry.getAdapter(adapterId);
+    const canonicalId = adapterId.endsWith("-provider")
+      ? adapterId.replace("-provider", "-adapter")
+      : adapterId;
+    const adapter = this.registry.getAdapter(canonicalId);
     if (!adapter) {
       throw new AdapterConfigurationError(`Adapter '${adapterId}' is not registered in AdapterManager.`);
     }
     return adapter;
   }
+
 
   /**
    * Executes an end-to-end AI request on the target adapter.
@@ -60,6 +64,8 @@ export class AdapterManager {
     }
     throw new AdapterConfigurationError(`Adapter '${adapterId}' does not support direct pipeline execution.`);
   }
+
+
 
   /**
    * Translates and normalizes request attributes into a canonical TranslationRequest using request-translator.

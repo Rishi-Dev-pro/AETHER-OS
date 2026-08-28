@@ -12,9 +12,11 @@ describe("Phase 9.10 Unified Runtime Pipeline Integration", () => {
     const { runtime } = bootstrapRuntime({ autoRegisterDefaultAdapters: true });
     await runtime.initialize();
 
-    runtime.registerCredential("groq-credential-id", "groq-provider", "API_KEY", {
-      apiKey: "gsk_integ_test_secret_key_100",
-    });
+    if (!runtime.getVault().hasCredential("groq-credential-id")) {
+      runtime.registerCredential("groq-credential-id", "groq-provider", "API_KEY", {
+        apiKey: "gsk_integ_test_secret_key_100",
+      });
+    }
 
     const originalFetch = globalThis.fetch;
     globalThis.fetch = vi.fn().mockResolvedValue({

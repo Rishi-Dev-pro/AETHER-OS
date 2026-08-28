@@ -156,4 +156,53 @@ export abstract class ProviderBase implements ProviderAdapter {
 
     return deepFreeze(translatedResponse);
   }
+
+  /**
+   * Executes a streaming request yielding StreamingChunk domain objects.
+   */
+  public async *executeStreaming(
+    request: TranslationRequest,
+    vault?: CredentialVault,
+    credentialRef?: CredentialReference,
+    signal?: AbortSignal
+  ): AsyncGenerator<import("../../runtime/streaming/streaming-contracts").StreamingChunk, void, unknown> {
+    validateTranslationRequest(request);
+
+    const serializedBody = {
+      ...this.serializeRequest(request),
+      stream: true,
+    };
+
+    const httpRequest = await buildPipelineRequest(
+      {
+        providerConfig: this.providerConfig,
+        endpointKey: "chat",
+        method: "POST",
+        body: serializedBody,
+        requestId: request.requestId,
+        credentialRef,
+      },
+      vault
+    );
+
+    const httpClient = new HttpClient();
+    const byteStream = await httpClient.executeStream(
+      {
+        method: httpRequest.method,
+        url: httpRequest.url,
+        headers: httpRequest.headers,
+        queryParams: httpRequest.queryParams,
+        body: httpRequest.body,
+        timeoutMs: httpRequest.timeoutMs,
+        requestId: httpRequest.requestId,
+      },
+      signal
+    );
+
+    const { parseSSEStream } = await import("./stream-parser");
+    yield* parseSSEStream(byteStream, request.requestId);
+  }
 }
+
+
+

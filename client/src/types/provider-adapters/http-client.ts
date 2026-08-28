@@ -183,6 +183,82 @@ export class HttpClient {
   }
 
   /**
+   * Executes an HTTP streaming request and returns a raw ReadableStream or AsyncIterable of chunks.
+   *
+   * @param requestOptions Outgoing request construction options.
+   * @param signal Optional AbortSignal for stream cancellation.
+   * @returns AsyncIterable of Uint8Array or string chunks.
+   */
+  async executeStream(
+    requestOptions: RequestBuilderOptions,
+    signal?: AbortSignal
+  ): Promise<AsyncIterable<Uint8Array | string>> {
+    const request: Readonly<HttpRequest> = buildHttpRequest(requestOptions);
+    const targetUrl = buildUrlWithQueryParams(request.url, request.queryParams);
+
+    this.totalRequests++;
+    this.activeRequests++;
+
+    try {
+      const fetchInit: RequestInit = {
+        method: request.method,
+        headers: { ...request.headers, accept: "text/event-stream, application/json" },
+        signal,
+      };
+
+      if (request.body && request.method !== "GET" && request.method !== "HEAD") {
+        fetchInit.body = typeof request.body === "string" ? request.body : JSON.stringify(request.body);
+      }
+
+      const rawResponse = await this.fetcher(targetUrl, fetchInit);
+
+      if (!rawResponse.ok) {
+        let errText = "";
+        try {
+          errText = await rawResponse.text();
+        } catch {
+          errText = "";
+        }
+        throw new HttpRequestError(
+          `Streaming request failed with HTTP ${rawResponse.status}: ${errText}`,
+          { statusCode: rawResponse.status, requestId: request.requestId }
+        );
+      }
+
+      if (rawResponse.body && Symbol.asyncIterator in (rawResponse.body as any)) {
+        return rawResponse.body as unknown as AsyncIterable<Uint8Array | string>;
+      }
+
+      if (rawResponse.body && typeof (rawResponse.body as any).getReader === "function") {
+        const reader = (rawResponse.body as any).getReader();
+        return {
+          async *[Symbol.asyncIterator]() {
+            try {
+              while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                if (value) yield value;
+              }
+            } finally {
+              reader.releaseLock();
+            }
+          },
+        };
+      }
+
+      // Fallback if body is text
+      const fullText = await rawResponse.text();
+      return {
+        async *[Symbol.asyncIterator]() {
+          yield fullText;
+        },
+      };
+    } finally {
+      this.activeRequests--;
+    }
+  }
+
+  /**
    * Captures and returns a frozen snapshot of transport statistics and current state.
    */
   getSnapshot(): Readonly<TransportSnapshot> {

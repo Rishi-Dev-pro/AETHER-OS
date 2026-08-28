@@ -50,6 +50,13 @@ export class UnifiedAdapterRuntime {
   }
 
   /**
+   * Access underlying Phase 9.9 CredentialVault instance.
+   */
+  public getVault(): CredentialVault {
+    return this.vault;
+  }
+
+  /**
    * Initializes the unified runtime and underlying components.
    */
   public async initialize(): Promise<void> {
@@ -112,6 +119,33 @@ export class UnifiedAdapterRuntime {
     credRef?: CredentialReference
   ): Promise<Readonly<TranslationResponse>> {
     return this.adapterManager.execute(adapterId, request, this.vault, credRef);
+  }
+
+
+
+  /**
+   * Executes a streaming request through the adapter pipeline, yielding StreamingChunk domain items.
+   */
+  public async *executeStreaming(
+    adapterId: string,
+    request: TranslationRequest,
+    credRef?: CredentialReference,
+    signal?: AbortSignal
+  ): AsyncGenerator<import("../../runtime/streaming/streaming-contracts").StreamingChunk, void, unknown> {
+    const adapter = this.adapterManager.getAdapter(adapterId) as any;
+    if (typeof adapter.executeStreaming === "function") {
+      yield* adapter.executeStreaming(request, this.vault, credRef, signal);
+    } else {
+      const resp = await this.adapterManager.execute(adapterId, request, this.vault, credRef);
+      yield Object.freeze({
+        chunkId: `chk_${request.requestId}_0`,
+        requestId: request.requestId,
+        index: 0,
+        deltaContent: resp.message.content,
+        finishReason: resp.finishReason as any,
+        timestamp: Date.now(),
+      });
+    }
   }
 
   /**
