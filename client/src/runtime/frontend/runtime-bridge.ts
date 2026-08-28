@@ -1,14 +1,14 @@
 /**
  * AETHER OS — Phase 9.11 AI Runtime Integration Layer
- * Milestone 3 Component: Runtime Bridge (`runtime-bridge.ts`)
+ * Milestone 5 Component: Runtime Bridge (`runtime-bridge.ts`)
  *
  * @file runtime-bridge.ts
- * @description Thread-safe bridge connecting the React frontend to the initialized AI runtime singleton
- * and orchestrating ConversationRuntime instances.
+ * @description Thread-safe bridge connecting the React frontend to the initialized AI runtime singleton,
+ * loading persisted sessions on boot, and orchestrating ConversationRuntime instances.
  *
  * @module @aether/runtime/frontend/runtime-bridge
  * @version 1.0.0
- * @status FROZEN ARCHITECTURE SPECIFICATION — PHASE 9.11 MILESTONE 3
+ * @status FROZEN ARCHITECTURE SPECIFICATION — PHASE 9.11 MILESTONE 5
  */
 
 import { bootstrapRuntime } from "../runtime-bootstrap";
@@ -17,7 +17,7 @@ import { getStatus, RuntimeStatus } from "../runtime-status";
 import { ConversationRuntime } from "../conversation/conversation-runtime";
 import type { RuntimeDiagnosticsMetricsSnapshot } from "../conversation/conversation-types";
 import type { RuntimeConfiguration } from "../../types/provider-adapters/runtime-types";
-import { useConversationStore } from "./conversation-store";
+import { useConversationStore, type FrontendMessage } from "./conversation-store";
 import { bindRuntimeEvents } from "./runtime-events";
 
 let activeConversationRuntime: ConversationRuntime | null = null;
@@ -31,7 +31,7 @@ export interface BridgeStatusReport {
 }
 
 /**
- * Initializes the AI runtime bridge and instantiates the ConversationRuntime.
+ * Initializes the AI runtime bridge, loads persisted sessions, and instantiates the ConversationRuntime.
  * Safe against double-initialization.
  */
 export async function initializeRuntimeBridge(
@@ -60,18 +60,39 @@ export async function initializeRuntimeBridge(
     modelId || "llama-3.3-70b-versatile"
   );
 
+  // Load and restore persisted sessions on boot
+  try {
+    await activeConversationRuntime.loadAndRestorePersistedSessions();
+  } catch (err) {
+    console.warn("[RuntimeBridge] Failed restoring persisted sessions, fallback to default:", err);
+  }
+
   // Bind event pipeline to conversation store
   if (unbindEventsCallback) {
     unbindEventsCallback();
   }
   unbindEventsCallback = bindRuntimeEvents(activeConversationRuntime);
 
-  // Update store state
+  // Synchronize initial session and message state to store
   const store = useConversationStore.getState();
   store.setRuntimeReady(true);
+  store.setSessions(activeConversationRuntime.listSessions());
+  store.setActiveSession(activeConversationRuntime.getActiveSessionId());
+
+  const snapshot = activeConversationRuntime.snapshot();
+  const frontendMessages: ReadonlyArray<FrontendMessage> = snapshot.messages.map((m) => ({
+    id: m.id,
+    role: m.role,
+    content: m.content,
+    timestamp: m.timestamp,
+    providerId: snapshot.activeProvider,
+    modelId: snapshot.activeModel,
+    status: "COMPLETED",
+  }));
+  store.setMessages(frontendMessages);
   store.setProviderAndModel(
-    providerId || activeConversationRuntime.snapshot().activeProvider || "groq-adapter",
-    modelId || activeConversationRuntime.snapshot().activeModel || "llama-3.3-70b-versatile"
+    providerId || snapshot.activeProvider || "groq-adapter",
+    modelId || snapshot.activeModel || "llama-3.3-70b-versatile"
   );
 
   return activeConversationRuntime;
@@ -135,8 +156,6 @@ export function getProviderStatus(): Record<string, boolean> {
       statusMap[p.providerId] = state !== "DISABLED" && state !== "DISPOSED" && state !== "UNHEALTHY";
     }
     return statusMap;
-
-
   } catch {
     return {};
   }

@@ -1,16 +1,40 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useConversation, useRuntime, useDiagnostics, useProvider } from "../../runtime/frontend";
-import { Bot, User, Cpu, Sparkles, Volume2, VolumeX, Trash2 } from "lucide-react";
+import { useConversationStore } from "../../runtime/frontend/conversation-store";
+import { runtimeController } from "../../runtime/frontend/runtime-controller";
+import {
+  Bot,
+  User,
+  Cpu,
+  Sparkles,
+  Volume2,
+  VolumeX,
+  Trash2,
+  Plus,
+  ChevronDown,
+  MessageSquare,
+  Edit2,
+  Check,
+  X,
+} from "lucide-react";
 import { setTTSEnabled, isTTSEnabled } from "../../runtime/frontend/speech-runtime";
-import { useState } from "react";
 
 export default function ConversationWidget() {
-  const { messages, isThinking, isStreaming, streamProgress, cancelStreaming, clearConversation } = useConversation();
+  const { messages, isThinking, isStreaming, streamProgress, cancelStreaming, clearConversation } =
+    useConversation();
   const { runtimeReady, currentQueueLength } = useRuntime();
   const { latency, totalTokens, estimatedCost } = useDiagnostics();
   const { currentProvider, currentModel } = useProvider();
 
+  // Multi-session state from Zustand store
+  const sessions = useConversationStore((state) => state.sessions);
+  const activeSessionId = useConversationStore((state) => state.activeSessionId);
+  const activeSessionTitle = useConversationStore((state) => state.activeSessionTitle);
+
   const [ttsActive, setTtsActive] = useState<boolean>(() => isTTSEnabled());
+  const [showSessionDrawer, setShowSessionDrawer] = useState(false);
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [editingTitleText, setEditingTitleText] = useState("");
   const messagesContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -33,11 +57,34 @@ export default function ConversationWidget() {
     return provider.toUpperCase();
   };
 
+  const handleCreateNewSession = async () => {
+    setShowSessionDrawer(false);
+    await runtimeController.createSession("New Conversation");
+  };
+
+  const handleSwitchSession = async (sessionId: string) => {
+    if (sessionId === activeSessionId) return;
+    setShowSessionDrawer(false);
+    await runtimeController.switchSession(sessionId);
+  };
+
+  const handleDeleteSession = async (e: React.MouseEvent, sessionId: string) => {
+    e.stopPropagation();
+    await runtimeController.deleteSession(sessionId);
+  };
+
+  const handleSaveRename = () => {
+    if (editingTitleText.trim() && activeSessionId) {
+      runtimeController.renameSession(activeSessionId, editingTitleText.trim());
+    }
+    setIsEditingTitle(false);
+  };
+
   return (
     <div
       className="
-      w-[240px]
-      xl:w-[260px]
+      w-[260px]
+      xl:w-[280px]
       rounded-2xl
       border
       border-white/[0.08]
@@ -51,28 +98,87 @@ export default function ConversationWidget() {
       hover:bg-[#07090f]/90
       flex
       flex-col
-      h-[260px]
-      xl:h-[280px]
+      h-[280px]
+      xl:h-[300px]
       select-none
+      relative
       "
     >
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-white/[0.06] pb-2 mb-2 shrink-0">
-        <div className="flex items-center gap-2">
-          <div className="flex h-5 w-5 items-center justify-center rounded-md border border-purple-500/20 bg-purple-500/10 text-purple-400">
-            <Cpu size={12} />
+      <div className="flex items-center justify-between border-b border-white/[0.06] pb-2 mb-1.5 shrink-0">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md border border-purple-500/20 bg-purple-500/10 text-purple-400">
+            <Cpu size={11} />
           </div>
-          <div>
-            <h3 className="text-[9px] font-bold uppercase tracking-[0.18em] text-slate-300 leading-tight">
-              AETHER RUNTIME
-            </h3>
-            <span className="text-[7px] font-mono text-purple-400 uppercase tracking-wider block">
+
+          <div className="min-w-0 flex-1">
+            {isEditingTitle ? (
+              <div className="flex items-center gap-1">
+                <input
+                  type="text"
+                  value={editingTitleText}
+                  onChange={(e) => setEditingTitleText(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleSaveRename()}
+                  autoFocus
+                  className="bg-black/60 border border-purple-500/40 rounded px-1 text-[8px] font-mono text-purple-200 outline-none w-24"
+                />
+                <button
+                  onClick={handleSaveRename}
+                  className="text-emerald-400 hover:text-emerald-300"
+                >
+                  <Check size={10} />
+                </button>
+                <button
+                  onClick={() => setIsEditingTitle(false)}
+                  className="text-slate-400 hover:text-slate-300"
+                >
+                  <X size={10} />
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setShowSessionDrawer(!showSessionDrawer)}
+                  className="flex items-center gap-1 hover:text-purple-300 transition-colors text-left truncate group"
+                  title="Switch Conversation Session"
+                >
+                  <span className="text-[9px] font-bold uppercase tracking-[0.14em] text-slate-200 truncate max-w-[90px]">
+                    {activeSessionTitle || "CONVERSATION"}
+                  </span>
+                  <ChevronDown
+                    size={9}
+                    className={`text-slate-400 transition-transform ${
+                      showSessionDrawer ? "rotate-180" : ""
+                    }`}
+                  />
+                </button>
+                <button
+                  onClick={() => {
+                    setEditingTitleText(activeSessionTitle || "New Conversation");
+                    setIsEditingTitle(true);
+                  }}
+                  className="opacity-0 group-hover:opacity-100 hover:opacity-100 text-slate-500 hover:text-purple-300 p-0.5 transition-opacity"
+                  title="Rename Session"
+                >
+                  <Edit2 size={8} />
+                </button>
+              </div>
+            )}
+            <span className="text-[7px] font-mono text-purple-400 uppercase tracking-wider block truncate">
               {getProviderBadge(currentProvider)}
             </span>
           </div>
         </div>
 
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1 shrink-0">
+          <button
+            onClick={handleCreateNewSession}
+            className="p-1 rounded-md border border-purple-500/20 bg-purple-500/10 text-purple-300 hover:bg-purple-500/20 hover:border-purple-500/40 transition-all text-[8px]"
+            title="New Chat Session"
+          >
+            <Plus size={11} />
+          </button>
+
           {isStreaming && (
             <button
               onClick={cancelStreaming}
@@ -112,6 +218,61 @@ export default function ConversationWidget() {
           />
         </div>
       </div>
+
+      {/* Session Drawer Overlay */}
+      {showSessionDrawer && (
+        <div className="absolute inset-x-3.5 top-12 bottom-10 z-20 bg-[#07090f]/95 border border-purple-500/30 rounded-xl p-2 shadow-2xl backdrop-blur-xl flex flex-col">
+          <div className="flex items-center justify-between border-b border-white/[0.06] pb-1.5 mb-1.5">
+            <span className="text-[8px] font-mono text-purple-300 uppercase tracking-widest flex items-center gap-1">
+              <MessageSquare size={9} /> Saved Sessions ({sessions.length})
+            </span>
+            <button
+              onClick={() => setShowSessionDrawer(false)}
+              className="text-slate-400 hover:text-white text-[8px]"
+            >
+              <X size={10} />
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto space-y-1 scrollbar-thin scrollbar-thumb-white/10">
+            {sessions.map((s) => {
+              const isActive = s.sessionId === activeSessionId;
+              return (
+                <div
+                  key={s.sessionId}
+                  onClick={() => handleSwitchSession(s.sessionId)}
+                  className={`flex items-center justify-between p-1.5 rounded-lg border text-left cursor-pointer transition-all ${
+                    isActive
+                      ? "bg-purple-950/50 border-purple-500/40 text-purple-200"
+                      : "bg-white/[0.02] border-white/[0.04] text-slate-300 hover:bg-white/[0.05] hover:border-white/10"
+                  }`}
+                >
+                  <div className="min-w-0 flex-1 pr-1">
+                    <p className="text-[8px] font-medium truncate">{s.title || "Untitled"}</p>
+                    <span className="text-[6px] font-mono text-slate-500 block">
+                      {new Date(s.updatedAt).toLocaleTimeString([], {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}{" "}
+                      • {s.messageCount || 0} msgs
+                    </span>
+                  </div>
+
+                  {sessions.length > 1 && (
+                    <button
+                      onClick={(e) => handleDeleteSession(e, s.sessionId)}
+                      className="text-slate-500 hover:text-rose-400 p-1 transition-colors"
+                      title="Delete Session"
+                    >
+                      <Trash2 size={9} />
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Messages List */}
       <div
@@ -199,12 +360,10 @@ export default function ConversationWidget() {
         )}
       </div>
 
-
-
       {/* Footer Diagnostics Telemetry */}
-      <div className="mt-2 pt-2 border-t border-white/[0.04] flex items-center justify-between text-[8px] font-mono text-slate-500 shrink-0">
+      <div className="mt-1.5 pt-1.5 border-t border-white/[0.04] flex items-center justify-between text-[8px] font-mono text-slate-500 shrink-0">
         <div>
-          <span>LATENCY: </span>
+          <span>LAT: </span>
           <span className="text-slate-300 font-semibold">{latency > 0 ? `${latency}ms` : "--"}</span>
         </div>
         <div>

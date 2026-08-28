@@ -64,6 +64,76 @@ export class ExecutionCoordinator {
   }
 
   /**
+   * Deterministically builds the outgoing request context with context pruning and token budgeting.
+   */
+  public prepareRequestContext(
+    conversationId: string,
+    executionId: string,
+    targetModel: string,
+    targetMaxTokens = 8192,
+    reserveOutputTokens = 1000
+  ): TranslationRequest {
+    const rawMessages = this.state.getMessages();
+    const systemPrompt = this.state.getSystemPrompt();
+
+    const estimateTokens = (text: unknown) => {
+      if (!text) return 4;
+      const len = typeof text === "string" ? text.length : JSON.stringify(text).length;
+      return Math.ceil(len / 4) + 4;
+    };
+    const systemTokens = estimateTokens(systemPrompt);
+    const availableInputBudget = Math.max(500, targetMaxTokens - reserveOutputTokens);
+
+    const canonicalMessages: CanonicalMessage[] = rawMessages.map((m) => ({
+      id: m.id,
+      role: m.role as any,
+      content: m.content,
+      timestamp: m.timestamp,
+    }));
+
+    const activeMessages = [...canonicalMessages];
+    let totalEstimated = systemTokens + activeMessages.reduce((acc, m) => acc + estimateTokens(m.content), 0);
+
+    let prunedCount = 0;
+    // Rule 2: Protect recent 3 turns (approx 6 messages)
+    const protectedCount = Math.min(activeMessages.length, 6);
+
+    // Rule 4: Sliding window pruning of oldest non-protected messages
+    while (totalEstimated > availableInputBudget && activeMessages.length > protectedCount) {
+      const removed = activeMessages.shift();
+      if (removed) {
+        prunedCount++;
+        totalEstimated -= estimateTokens(removed.content);
+      }
+    }
+
+    if (prunedCount > 0) {
+      this.events.emit({
+        eventId: `evt_${Date.now()}_prune`,
+        type: "ContextPruned",
+        conversationId,
+        originalMessageCount: rawMessages.length,
+        prunedMessageCount: prunedCount,
+        estimatedTokens: totalEstimated,
+        timestamp: Date.now(),
+      });
+    }
+
+    const request: TranslationRequest = {
+      requestId: `req_${executionId}`,
+      modelId: targetModel,
+      context: {
+        conversationId,
+        messages: activeMessages,
+      },
+      systemInstruction: systemPrompt,
+    };
+
+    this.validateRequest(request);
+    return request;
+  }
+
+  /**
    * Executes a user prompt against the UnifiedAdapterRuntime.
    *
    * @param adapterId Provider adapter ID (e.g., 'groq-adapter', 'nvidia-adapter').
@@ -128,29 +198,8 @@ export class ExecutionCoordinator {
       timestamp: Date.now(),
     });
 
-
-    // 6. Build TranslationRequest with canonical conversation context
-    const canonicalMessages: CanonicalMessage[] = this.state.getMessages().map((m) => {
-      if (m.role === "system") {
-        return { id: m.id, role: "system", content: m.content, timestamp: m.timestamp };
-      } else if (m.role === "user") {
-        return { id: m.id, role: "user", content: m.content, timestamp: m.timestamp };
-      } else {
-        return { id: m.id, role: "assistant", content: m.content, timestamp: m.timestamp };
-      }
-    });
-
-    const translationRequest: TranslationRequest = {
-      requestId: `req_${executionId}`,
-      modelId: targetModel,
-      context: {
-        conversationId,
-        messages: canonicalMessages,
-      },
-      systemInstruction: this.state.getSystemPrompt(),
-    };
-
-    this.validateRequest(translationRequest);
+    // 6. Build TranslationRequest with context pruning and token budgeting
+    const translationRequest = this.prepareRequestContext(conversationId, executionId, targetModel);
 
     // 7. Emit RequestDispatched event
     this.events.emit({
@@ -345,24 +394,7 @@ export class ExecutionCoordinator {
       timestamp: Date.now(),
     });
 
-    const canonicalMessages: CanonicalMessage[] = this.state.getMessages().map((m) => ({
-      id: m.id,
-      role: m.role as any,
-      content: m.content,
-      timestamp: m.timestamp,
-    }));
-
-    const translationRequest: TranslationRequest = {
-      requestId: `req_${executionId}`,
-      modelId: targetModel,
-      context: {
-        conversationId,
-        messages: canonicalMessages,
-      },
-      systemInstruction: this.state.getSystemPrompt(),
-    };
-
-    this.validateRequest(translationRequest);
+    const translationRequest = this.prepareRequestContext(conversationId, executionId, targetModel);
 
     this.events.emit({
       eventId: `evt_${Date.now()}_req`,

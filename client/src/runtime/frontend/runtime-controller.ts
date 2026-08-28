@@ -1,14 +1,14 @@
 /**
  * AETHER OS — Phase 9.11 AI Runtime Integration Layer
- * Milestone 3 Component: Runtime Controller Subsystem (`runtime-controller.ts`)
+ * Milestone 5 Component: Runtime Controller Subsystem (`runtime-controller.ts`)
  *
  * @file runtime-controller.ts
  * @description Master application-level controller orchestrating initialization, message dispatches,
- * provider configuration, diagnostics retrieval, speech controls, and clean lifecycle teardown.
+ * streaming lifecycle with cancellation guards, multi-session switching, diagnostics retrieval, and speech controls.
  *
  * @module @aether/runtime/frontend/runtime-controller
  * @version 1.0.0
- * @status FROZEN ARCHITECTURE SPECIFICATION — PHASE 9.11 MILESTONE 3
+ * @status FROZEN ARCHITECTURE SPECIFICATION — PHASE 9.11 MILESTONE 5
  */
 
 import {
@@ -22,6 +22,7 @@ import { bindSpeechRecognition, setTTSEnabled, cancelSpeech, speakLatestAssistan
 import { getFrontendRuntimeStatus, type FrontendRuntimeStatus } from "./runtime-status";
 import { useConversationStore } from "./conversation-store";
 import type { ExecutionResult } from "../conversation/conversation-types";
+import type { SessionMetadata, SessionSnapshot } from "../conversation/session-types";
 import type { RuntimeConfiguration } from "../../types/provider-adapters/runtime-types";
 
 export interface DiagnosticsData {
@@ -39,6 +40,7 @@ export interface DiagnosticsData {
 export class RuntimeController {
   private static instance: RuntimeController | null = null;
   private unbindSpeech: (() => void) | null = null;
+  private activeStreamController: AbortController | null = null;
 
   /**
    * Singleton instance accessor.
@@ -75,6 +77,95 @@ export class RuntimeController {
     this.unbindSpeech = bindSpeechRecognition(runtime);
   }
 
+  // ============================================================================
+  // MULTI-SESSION ORCHESTRATION
+  // ============================================================================
+
+  /**
+   * Creates a new conversation session, safely cancelling any active stream first.
+   */
+  public async createSession(title?: string, providerId?: string, modelId?: string): Promise<SessionMetadata> {
+    if (!hasRuntimeBridge()) {
+      await this.initialize();
+    }
+
+    this.cancelStreaming();
+    const runtime = getConversationRuntime();
+    return runtime.createSession({ title, providerId, modelId });
+  }
+
+  /**
+   * Switches active session to target sessionId.
+   * Cancels any active stream to prevent cross-session token contamination.
+   */
+  public async switchSession(sessionId: string): Promise<SessionMetadata> {
+    if (!hasRuntimeBridge()) {
+      await this.initialize();
+    }
+
+    this.cancelStreaming();
+    const runtime = getConversationRuntime();
+    return runtime.switchSession(sessionId);
+  }
+
+  /**
+   * Renames an existing session.
+   */
+  public renameSession(sessionId: string, newTitle: string): SessionMetadata {
+    const runtime = getConversationRuntime();
+    return runtime.renameSession(sessionId, newTitle);
+  }
+
+  /**
+   * Deletes a session and updates active state.
+   */
+  public async deleteSession(sessionId: string): Promise<boolean> {
+    if (!hasRuntimeBridge()) {
+      await this.initialize();
+    }
+
+    this.cancelStreaming();
+    const runtime = getConversationRuntime();
+    return runtime.deleteSession(sessionId);
+  }
+
+  /**
+   * Creates a memory snapshot for the active session.
+   */
+  public async createMemorySnapshot(label?: string): Promise<SessionSnapshot> {
+    const runtime = getConversationRuntime();
+    return runtime.createMemorySnapshot(label);
+  }
+
+  /**
+   * Restores a session from a memory snapshot.
+   */
+  public async restoreMemorySnapshot(snapshotId: string): Promise<SessionMetadata> {
+    this.cancelStreaming();
+    const runtime = getConversationRuntime();
+    return runtime.restoreMemorySnapshot(snapshotId);
+  }
+
+  /**
+   * Lists all saved snapshots.
+   */
+  public async listMemorySnapshots(sessionId?: string): Promise<ReadonlyArray<SessionSnapshot>> {
+    const runtime = getConversationRuntime();
+    return runtime.listMemorySnapshots(sessionId);
+  }
+
+  /**
+   * Deletes a memory snapshot.
+   */
+  public async deleteMemorySnapshot(snapshotId: string): Promise<boolean> {
+    const runtime = getConversationRuntime();
+    return runtime.deleteMemorySnapshot(snapshotId);
+  }
+
+  // ============================================================================
+  // MESSAGE EXECUTION & STREAMING
+  // ============================================================================
+
   /**
    * Sends user message prompt to active ConversationRuntime and handles speech synthesis on response.
    */
@@ -105,8 +196,6 @@ export class RuntimeController {
       throw err;
     }
   }
-
-  private activeStreamController: AbortController | null = null;
 
   /**
    * Sends user message prompt to active ConversationRuntime with real-time SSE token streaming.

@@ -1,18 +1,19 @@
 /**
  * AETHER OS — Phase 9.11 AI Runtime Integration Layer
- * Milestone 3 Component: Frontend Conversation Store (`conversation-store.ts`)
+ * Milestone 5 Component: Frontend Conversation Store (`conversation-store.ts`)
  *
  * @file conversation-store.ts
- * @description Strongly-typed, immutable Zustand store managing conversation messages, runtime state,
- * thinking/speaking indicators, active providers, latency, token usage, cost, errors, and snapshots.
+ * @description Strongly-typed, immutable Zustand store managing conversation messages, multi-session metadata,
+ * runtime state, thinking/speaking indicators, active providers, latency, token usage, cost, errors, and snapshots.
  *
  * @module @aether/runtime/frontend/conversation-store
  * @version 1.0.0
- * @status FROZEN ARCHITECTURE SPECIFICATION — PHASE 9.11 MILESTONE 3
+ * @status FROZEN ARCHITECTURE SPECIFICATION — PHASE 9.11 MILESTONE 5
  */
 
 import { create } from "zustand";
 import type { ConversationStateSnapshot } from "../conversation/conversation-types";
+import type { SessionMetadata } from "../conversation/session-types";
 
 /**
  * Representation of a conversation message within the frontend state.
@@ -75,6 +76,11 @@ export interface ConversationState {
   readonly errors: ReadonlyArray<ErrorEntry>;
   readonly snapshots: ReadonlyArray<ConversationStateSnapshot>;
 
+  // Multi-Session State
+  readonly sessions: ReadonlyArray<SessionMetadata>;
+  readonly activeSessionId: string;
+  readonly activeSessionTitle: string;
+
   // Actions / Mutators
   readonly setRuntimeReady: (ready: boolean) => void;
   readonly setIsThinking: (thinking: boolean) => void;
@@ -94,8 +100,13 @@ export interface ConversationState {
   readonly clearErrors: () => void;
   readonly takeSnapshot: (snapshot: ConversationStateSnapshot) => void;
   readonly clearConversation: () => void;
-}
 
+  // Session Actions
+  readonly setSessions: (sessions: ReadonlyArray<SessionMetadata>) => void;
+  readonly setActiveSession: (sessionId: string, title?: string) => void;
+  readonly updateSessionInStore: (sessionId: string, update: Partial<SessionMetadata>) => void;
+  readonly removeSessionFromStore: (sessionId: string) => void;
+}
 
 const initialTokenUsage: TokenUsageMetrics = {
   promptTokens: 0,
@@ -121,6 +132,11 @@ export const useConversationStore = create<ConversationState>((set) => ({
   errors: [],
   snapshots: [],
 
+  // Multi-session defaults
+  sessions: [],
+  activeSessionId: "",
+  activeSessionTitle: "New Conversation",
+
   setRuntimeReady: (ready) => set({ runtimeReady: ready }),
 
   setIsThinking: (thinking) => set({ isThinking: thinking }),
@@ -137,7 +153,6 @@ export const useConversationStore = create<ConversationState>((set) => ({
     }),
 
   setProviderAndModel: (provider, model) =>
-
     set({
       currentProvider: provider,
       currentModel: model,
@@ -156,8 +171,6 @@ export const useConversationStore = create<ConversationState>((set) => ({
     })),
 
   setMessages: (messages) => set({ messages: [...messages] }),
-
-
 
   updateMetrics: (metrics) =>
     set((state) => {
@@ -220,4 +233,31 @@ export const useConversationStore = create<ConversationState>((set) => ({
       estimatedCost: 0,
       errors: [],
     }),
+
+  setSessions: (sessions) => set({ sessions: [...sessions] }),
+
+  setActiveSession: (sessionId, title) =>
+    set((state) => {
+      const found = state.sessions.find((s) => s.sessionId === sessionId);
+      return {
+        activeSessionId: sessionId,
+        activeSessionTitle: title || found?.title || "Conversation",
+      };
+    }),
+
+  updateSessionInStore: (sessionId, update) =>
+    set((state) => ({
+      sessions: state.sessions.map((s) =>
+        s.sessionId === sessionId ? { ...s, ...update } : s
+      ),
+      activeSessionTitle:
+        state.activeSessionId === sessionId && update.title
+          ? update.title
+          : state.activeSessionTitle,
+    })),
+
+  removeSessionFromStore: (sessionId) =>
+    set((state) => ({
+      sessions: state.sessions.filter((s) => s.sessionId !== sessionId),
+    })),
 }));

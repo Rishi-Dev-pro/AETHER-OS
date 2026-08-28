@@ -121,7 +121,12 @@ export type RuntimeEventType =
   | "ExecutionStreamCompleted"
   | "ExecutionStreamCancelled"
   | "ExecutionStreamFailed"
-  | "ExecutionStreamTimeout";
+  | "ExecutionStreamTimeout"
+  | "SessionCreated"
+  | "SessionSwitched"
+  | "SessionDeleted"
+  | "SessionRenamed"
+  | "ContextPruned";
 
 export interface BaseRuntimeEvent {
   readonly eventId: string;
@@ -217,6 +222,36 @@ export interface ExecutionStreamTimeoutEvent extends BaseRuntimeEvent {
   readonly timeoutMs: number;
 }
 
+export interface SessionCreatedEvent extends BaseRuntimeEvent {
+  readonly type: "SessionCreated";
+  readonly sessionId: string;
+  readonly title: string;
+}
+
+export interface SessionSwitchedEvent extends BaseRuntimeEvent {
+  readonly type: "SessionSwitched";
+  readonly previousSessionId: string;
+  readonly currentSessionId: string;
+}
+
+export interface SessionDeletedEvent extends BaseRuntimeEvent {
+  readonly type: "SessionDeleted";
+  readonly sessionId: string;
+}
+
+export interface SessionRenamedEvent extends BaseRuntimeEvent {
+  readonly type: "SessionRenamed";
+  readonly sessionId: string;
+  readonly newTitle: string;
+}
+
+export interface ContextPrunedEvent extends BaseRuntimeEvent {
+  readonly type: "ContextPruned";
+  readonly originalMessageCount: number;
+  readonly prunedMessageCount: number;
+  readonly estimatedTokens: number;
+}
+
 export type RuntimeEvent =
   | ExecutionStartedEvent
   | ProviderSelectedEvent
@@ -231,7 +266,12 @@ export type RuntimeEvent =
   | ExecutionStreamCompletedEvent
   | ExecutionStreamCancelledEvent
   | ExecutionStreamFailedEvent
-  | ExecutionStreamTimeoutEvent;
+  | ExecutionStreamTimeoutEvent
+  | SessionCreatedEvent
+  | SessionSwitchedEvent
+  | SessionDeletedEvent
+  | SessionRenamedEvent
+  | ContextPrunedEvent;
 
 
 /**

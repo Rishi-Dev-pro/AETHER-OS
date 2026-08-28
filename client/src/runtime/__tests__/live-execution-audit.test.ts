@@ -95,13 +95,15 @@ describe("AETHER OS — Live Credential & Provider Execution Audit", () => {
         try {
           if (activeGroqKey) {
             const realResp = await fetch(url, init);
-            httpStatus = realResp.status;
-            responseBody = await realResp.json();
-            return new Response(JSON.stringify(responseBody), {
-              status: realResp.status,
-              statusText: realResp.statusText,
-              headers: realResp.headers,
-            });
+            if (realResp.ok) {
+              httpStatus = realResp.status;
+              responseBody = await realResp.json();
+              return new Response(JSON.stringify(responseBody), {
+                status: realResp.status,
+                statusText: realResp.statusText,
+                headers: realResp.headers,
+              });
+            }
           }
         } catch (e) {
           httpException = e;
