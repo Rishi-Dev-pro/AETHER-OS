@@ -133,7 +133,7 @@ export function useProvider() {
   }, []);
 
   const availableProviders = [
-    { id: "groq-adapter", name: "Groq Llama 3.3 70B", defaultModel: "llama-3.3-70b-versatile" },
+    { id: "groq-adapter", name: "Groq Cloud (GPT-OSS 120B)", defaultModel: "openai/gpt-oss-120b" },
     { id: "nvidia-adapter", name: "NVIDIA Llama 3.1 405B", defaultModel: "meta/llama-3.1-405b-instruct" },
     { id: "openai-adapter", name: "OpenAI GPT-4o", defaultModel: "gpt-4o" },
     { id: "ollama-adapter", name: "Ollama Llama 3 local", defaultModel: "llama3" },

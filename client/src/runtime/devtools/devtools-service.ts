@@ -276,7 +276,7 @@ export class DevToolsService {
       activeSessionId: activeSession?.metadata.sessionId || "none",
       activeSessionTitle: activeSession?.metadata.title || "Default Session",
       activeProvider: snapshot?.activeProvider || "groq-adapter",
-      activeModel: snapshot?.activeModel || "llama-3.3-70b-versatile",
+      activeModel: snapshot?.activeModel || "openai/gpt-oss-120b",
       queueLength: queue.length,
       isProcessingQueue: isProcessing,
       isStreaming: isProcessing,
@@ -361,7 +361,7 @@ export class DevToolsService {
   private getDefaultModels(adapterId: string): string[] {
     switch (adapterId) {
       case "groq-adapter":
-        return ["llama-3.3-70b-versatile", "mixtral-8x7b-32768", "gemma2-9b-it"];
+        return ["openai/gpt-oss-120b", "qwen/qwen3.8-27b", "openai/gpt-oss-20b", "llama-3.3-70b-versatile"];
       case "nvidia-adapter":
         return ["nvidia/nvidia-nemotron-nano-9b-v2", "meta/llama-3.1-70b-instruct"];
       case "openai-adapter":

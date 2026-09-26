@@ -59,16 +59,21 @@ export function bindSpeechRecognition(runtime: ConversationRuntime): () => void 
       const transcript = state.transcript.trim();
       if (transcript && transcript !== lastProcessedTranscript && activeSpeechRuntime) {
         lastProcessedTranscript = transcript;
-        activeSpeechRuntime.sendMessage(transcript).catch((err) => {
-          console.error("SpeechRuntime sendMessage failed:", err);
-          useConversationStore.getState().addError({
-            code: "SPEECH_SEND_FAILED",
-            message: `Speech dispatch error: ${err.message || err}`,
+        activeSpeechRuntime
+          .sendMessage(transcript)
+          .then((result) => {
+            if (result && result.response && result.response.message && result.response.message.content) {
+              speakLatestAssistantMessage(result.response.message.content);
+            }
+          })
+          .catch((err) => {
+            console.error("SpeechRuntime sendMessage failed:", err);
+            useConversationStore.getState().addError({
+              code: "SPEECH_SEND_FAILED",
+              message: `Speech dispatch error: ${err.message || err}`,
+            });
           });
-        });
       }
-
-
     }
   });
 
@@ -78,13 +83,19 @@ export function bindSpeechRecognition(runtime: ConversationRuntime): () => void 
       const transcript = state.transcript.trim();
       if (transcript && transcript !== lastProcessedTranscript && activeSpeechRuntime) {
         lastProcessedTranscript = transcript;
-        activeSpeechRuntime.sendMessage(transcript).catch((err) => {
-          console.error("SpeechRuntime sendMessage fallback failed:", err);
-        });
+        activeSpeechRuntime
+          .sendMessage(transcript)
+          .then((result) => {
+            if (result && result.response && result.response.message && result.response.message.content) {
+              speakLatestAssistantMessage(result.response.message.content);
+            }
+          })
+          .catch((err) => {
+            console.error("SpeechRuntime sendMessage fallback failed:", err);
+          });
       }
     }
   });
-
 
   return () => {
     if (cognitiveUnsubscribe) {
@@ -112,6 +123,9 @@ export function speak(text: string, options?: SpeechSynthesisOptions): boolean {
     const synth = window.speechSynthesis;
     // Cancel ongoing speech before queuing new utterance
     synth.cancel();
+    if (synth.paused) {
+      synth.resume();
+    }
 
     if (!text.trim()) {
       useConversationStore.getState().setIsSpeaking(false);
@@ -147,6 +161,10 @@ export function speak(text: string, options?: SpeechSynthesisOptions): boolean {
     };
 
     synth.speak(utterance);
+    // Extra safety: resume if browser auto-suspended playback
+    if (synth.paused) {
+      synth.resume();
+    }
     return true;
   } catch (err) {
     console.error("SpeechSynthesis speak exception:", err);

@@ -57,7 +57,7 @@ export async function initializeRuntimeBridge(
     instance.runtime,
     systemPrompt,
     providerId || "groq-adapter",
-    modelId || "llama-3.3-70b-versatile"
+    modelId || "openai/gpt-oss-120b"
   );
 
   // Load and restore persisted sessions on boot
@@ -92,7 +92,7 @@ export async function initializeRuntimeBridge(
   store.setMessages(frontendMessages);
   store.setProviderAndModel(
     providerId || snapshot.activeProvider || "groq-adapter",
-    modelId || snapshot.activeModel || "llama-3.3-70b-versatile"
+    modelId || snapshot.activeModel || "openai/gpt-oss-120b"
   );
 
   return activeConversationRuntime;

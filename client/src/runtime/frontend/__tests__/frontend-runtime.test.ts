@@ -223,7 +223,7 @@ describe("Milestone 3 — Frontend Runtime Integration Suite", () => {
       const diagnostics = runtimeController.getDiagnostics();
       expect(diagnostics).toBeDefined();
       expect(diagnostics.provider).toBe("groq-adapter");
-      expect(diagnostics.model).toBe("llama-3.3-70b-versatile");
+      expect(diagnostics.model).toBe("openai/gpt-oss-120b");
       expect(diagnostics.totalTokens).toBeGreaterThanOrEqual(0);
     });
   });

@@ -37,6 +37,7 @@ coverage/
 
 # Cache
 .cache/
+*.tsbuildinfo
 
 # Python Models (optional if downloadable)
 vision/models/*.task

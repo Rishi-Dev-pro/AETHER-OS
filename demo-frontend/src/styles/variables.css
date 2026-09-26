@@ -1,0 +1,38 @@
+:root {
+  /* Void backgrounds */
+  --bg-void: #020308;
+  --bg-deep: #060a14;
+  --bg-panel: rgba(8, 14, 28, 0.65);
+  --bg-panel-hover: rgba(12, 20, 40, 0.75);
+  --bg-elevated: rgba(15, 25, 50, 0.8);
+
+  /* Accent palette */
+  --accent-primary: #00e5ff;
+  --accent-secondary: #7c3aed;
+  --accent-warm: #f472b6;
+  --accent-success: #34d399;
+  --accent-warning: #fbbf24;
+  --accent-danger: #f87171;
+
+  /* Glow */
+  --glow-primary: 0 0 20px rgba(0, 229, 255, 0.15);
+  --glow-secondary: 0 0 20px rgba(124, 58, 237, 0.15);
+  --glow-warm: 0 0 20px rgba(244, 114, 182, 0.15);
+
+  /* Text */
+  --text-primary: #f0f4f8;
+  --text-secondary: #94a3b8;
+  --text-dim: #475569;
+  --text-accent: #00e5ff;
+
+  /* Border */
+  --border-subtle: rgba(255, 255, 255, 0.05);
+  --border-medium: rgba(255, 255, 255, 0.08);
+  --border-accent: rgba(0, 229, 255, 0.2);
+
+  /* Radius */
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-xl: 28px;
+}

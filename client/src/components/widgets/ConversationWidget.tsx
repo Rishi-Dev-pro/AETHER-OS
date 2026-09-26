@@ -52,7 +52,7 @@ export default function ConversationWidget() {
   };
 
   const getProviderBadge = (provider: string) => {
-    if (provider.includes("groq")) return "GROQ LLAMA-3.3";
+    if (provider.includes("groq")) return "GROQ LPU CLOUD";
     if (provider.includes("nvidia")) return "NVIDIA LLAMA-3.1";
     if (provider.includes("openai")) return "OPENAI GPT-4O";
     if (provider.includes("ollama")) return "OLLAMA LOCAL";

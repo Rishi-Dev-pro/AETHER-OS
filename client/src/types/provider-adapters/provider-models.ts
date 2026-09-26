@@ -27,10 +27,13 @@ export const OPENAI_MODELS = [
 
 /** Supported Groq model identifiers */
 export const GROQ_MODELS = [
+  "openai/gpt-oss-120b",
+  "qwen/qwen3.8-27b",
+  "openai/gpt-oss-20b",
+  "qwen/qwen3.6-27b",
+  "groq/compound",
+  "groq/compound-mini",
   "llama-3.3-70b-versatile",
-  "deepseek-r1-distill-llama-70b",
-  "qwen-qwq-32b",
-  "mixtral-8x7b-32768",
 ] as const;
 
 /** Supported NVIDIA NIM model identifiers */

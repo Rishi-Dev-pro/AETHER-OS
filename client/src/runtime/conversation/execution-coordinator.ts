@@ -186,7 +186,7 @@ export class ExecutionCoordinator {
       : `${rawAdapter}-adapter`;
 
     const targetProvider = targetAdapter.replace("-adapter", "-provider");
-    const targetModel = modelId || (targetAdapter === "nvidia-adapter" ? "nvidia/nvidia-nemotron-nano-9b-v2" : "llama-3.3-70b-versatile");
+    const targetModel = modelId || (targetAdapter === "nvidia-adapter" ? "nvidia/nvidia-nemotron-nano-9b-v2" : "openai/gpt-oss-120b");
 
     this.state.setProviderAndModel(targetProvider, targetModel);
     this.diagnostics.setActiveProviderAndModel(targetProvider, targetModel);
@@ -255,7 +255,7 @@ export class ExecutionCoordinator {
             ? "nvidia/nvidia-nemotron-nano-9b-v2"
             : toAdapter.includes("openai")
             ? "gpt-4o"
-            : "llama-3.3-70b-versatile";
+            : "openai/gpt-oss-120b";
           this.state.setProviderAndModel(newTargetProvider, newModel);
           this.diagnostics.setActiveProviderAndModel(newTargetProvider, newModel);
         },
@@ -438,7 +438,7 @@ export class ExecutionCoordinator {
       ? rawAdapter
       : `${rawAdapter}-adapter`;
 
-    let targetModel = modelId || (targetAdapter === "nvidia-adapter" ? "nvidia/nvidia-nemotron-nano-9b-v2" : "llama-3.3-70b-versatile");
+    let targetModel = modelId || (targetAdapter === "nvidia-adapter" ? "nvidia/nvidia-nemotron-nano-9b-v2" : "openai/gpt-oss-120b");
 
     // Circuit breaker check for streaming
     const cb = this.resilience.getCircuitBreakerEngine();
@@ -472,7 +472,7 @@ export class ExecutionCoordinator {
           ? "nvidia/nvidia-nemotron-nano-9b-v2"
           : targetAdapter.includes("openai")
           ? "gpt-4o"
-          : "llama-3.3-70b-versatile";
+          : "openai/gpt-oss-120b";
       }
     }
 

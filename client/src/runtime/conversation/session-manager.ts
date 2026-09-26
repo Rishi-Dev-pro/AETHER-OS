@@ -79,7 +79,7 @@ export class SessionManager {
     const now = Date.now();
     const systemPrompt = options.systemPrompt || "You are AETHER OS, a powerful AI operating system assistant.";
     const activeProvider = options.providerId || "groq-adapter";
-    const activeModel = options.modelId || "llama-3.3-70b-versatile";
+    const activeModel = options.modelId || "openai/gpt-oss-120b";
     const title = options.title || "New Conversation";
 
     const state = new ConversationState(sessionId, systemPrompt, activeProvider, activeModel);

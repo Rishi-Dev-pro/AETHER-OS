@@ -91,7 +91,7 @@ export class ResilienceCoordinator {
     if (adapterId.includes("nvidia")) return "nvidia/nvidia-nemotron-nano-9b-v2";
     if (adapterId.includes("openai")) return "gpt-4o";
     if (adapterId.includes("ollama")) return "llama3";
-    return "llama-3.3-70b-versatile";
+    return "openai/gpt-oss-120b";
   }
 
   /**

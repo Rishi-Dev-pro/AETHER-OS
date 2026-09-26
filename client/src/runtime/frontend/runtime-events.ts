@@ -25,6 +25,7 @@ import type {
   SessionRenamedEvent,
   SessionDeletedEvent,
 } from "../conversation/conversation-types";
+import { speakLatestAssistantMessage } from "./speech-runtime";
 import { useConversationStore, type FrontendMessage } from "./conversation-store";
 
 /**
@@ -125,11 +126,14 @@ export function bindRuntimeEvents(conversationRuntime: ConversationRuntime): () 
 
   const subStreamCompleted = conversationRuntime.subscribeToEvents<any>(
     "ExecutionStreamCompleted",
-    (_event) => {
+    (event) => {
       const store = useConversationStore.getState();
       store.setIsStreaming(false);
       store.setStreamProgress(null);
       syncMessagesFromSnapshot(conversationRuntime, "COMPLETED");
+      if (event && event.response && event.response.message && event.response.message.content) {
+        speakLatestAssistantMessage(event.response.message.content);
+      }
     }
   );
 

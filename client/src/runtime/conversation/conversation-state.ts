@@ -51,7 +51,7 @@ export class ConversationState {
     conversationId?: string,
     systemPrompt: string = "You are AETHER OS, a powerful AI operating system assistant.",
     activeProvider: string = "groq-provider",
-    activeModel: string = "llama-3.3-70b-versatile"
+    activeModel: string = "openai/gpt-oss-120b"
   ) {
     this.conversationId = conversationId ?? `conv_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
     this.systemPrompt = systemPrompt;
