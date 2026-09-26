@@ -7,32 +7,35 @@
  * desktop action execution states, live progress spinners, latency metrics, and completion feedback.
  */
 
-import React, { useEffect, useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
-  ExternalLink,
-  Search,
-  Globe,
-  Volume2,
-  VolumeX,
-  Lock,
-  Cpu,
-  Camera,
-  MousePointer,
-  Type,
   Loader2,
   CheckCircle2,
   AlertCircle,
+  ExternalLink,
+  AppWindow,
+  XCircle,
+  Search,
+  Globe,
+  Compass,
+  Volume2,
+  VolumeX,
+  Lock,
+  Camera,
+  Cpu,
+  MousePointer,
+  Type,
   X,
 } from "lucide-react";
 import { useActionStore } from "../../store/actionStore";
 import type { DesktopActionType } from "../../types/desktopAction";
 
 const ACTION_ICONS: Record<DesktopActionType, React.ReactNode> = {
-  open_app: <ExternalLink className="w-3.5 h-3.5" />,
-  close_app: <X className="w-3.5 h-3.5" />,
+  open_app: <AppWindow className="w-3.5 h-3.5" />,
+  close_app: <XCircle className="w-3.5 h-3.5" />,
   search_web: <Search className="w-3.5 h-3.5" />,
   open_url: <Globe className="w-3.5 h-3.5" />,
-  navigate: <Globe className="w-3.5 h-3.5" />,
+  navigate: <Compass className="w-3.5 h-3.5" />,
   adjust_volume: <Volume2 className="w-3.5 h-3.5" />,
   mute_volume: <VolumeX className="w-3.5 h-3.5" />,
   unmute_volume: <Volume2 className="w-3.5 h-3.5" />,
@@ -45,15 +48,15 @@ const ACTION_ICONS: Record<DesktopActionType, React.ReactNode> = {
 };
 
 const ACTION_LABELS: Record<DesktopActionType, string> = {
-  open_app: "LAUNCH APP",
+  open_app: "OPEN APP",
   close_app: "CLOSE APP",
-  search_web: "WEB SEARCH",
-  open_url: "NAVIGATE URL",
+  search_web: "SEARCH WEB",
+  open_url: "OPEN URL",
   navigate: "NAVIGATE",
-  adjust_volume: "VOLUME CONTROL",
-  mute_volume: "MUTE VOLUME",
-  unmute_volume: "UNMUTE VOLUME",
-  lock_workstation: "LOCK SYSTEM",
+  adjust_volume: "ADJUST VOLUME",
+  mute_volume: "MUTE",
+  unmute_volume: "UNMUTE",
+  lock_workstation: "LOCK WORKSTATION",
   lock_screen: "LOCK SCREEN",
   get_system_info: "SYSTEM INFO",
   take_screenshot: "SCREENSHOT",
@@ -66,30 +69,35 @@ export const ActionNotificationPill: React.FC = () => {
   const lastResult = useActionStore((state) => state.lastResult);
   const isExecuting = useActionStore((state) => state.isExecuting);
 
-  const [visible, setVisible] = useState(false);
-  const [dismissed, setDismissed] = useState(false);
+  const [dismissedExecutionId, setDismissedExecutionId] = useState<string | null>(null);
+  const [dismissedResultId, setDismissedResultId] = useState<string | null>(null);
+  const [expiredResultId, setExpiredResultId] = useState<string | null>(null);
 
-  // Show pill when an action starts executing
-  useEffect(() => {
-    if (isExecuting && activeAction) {
-      setVisible(true);
-      setDismissed(false);
-    }
-  }, [isExecuting, activeAction]);
-
-  // When action completes, keep visible for 4s then fade out
+  // Expire completion notification after 4s
   useEffect(() => {
     if (!isExecuting && lastResult) {
-      setVisible(true);
-      setDismissed(false);
       const timer = setTimeout(() => {
-        setVisible(false);
+        setExpiredResultId(lastResult.actionId);
       }, 4000);
       return () => clearTimeout(timer);
     }
   }, [isExecuting, lastResult]);
 
-  if (!visible || dismissed) return null;
+  const isExecutingPill = Boolean(isExecuting && activeAction);
+  const isCompletedPill = Boolean(
+    !isExecuting &&
+      lastResult &&
+      expiredResultId !== lastResult.actionId
+  );
+
+  const isVisible = isExecutingPill || isCompletedPill;
+  const isDismissed = isExecutingPill
+    ? activeAction?.actionId === dismissedExecutionId
+    : isCompletedPill
+    ? lastResult?.actionId === dismissedResultId
+    : false;
+
+  if (!isVisible || isDismissed) return null;
 
   const currentType = (activeAction?.type || lastResult?.type || "open_app") as DesktopActionType;
   const icon = ACTION_ICONS[currentType] || <ExternalLink className="w-3.5 h-3.5" />;
@@ -116,12 +124,18 @@ export const ActionNotificationPill: React.FC = () => {
   const isSuccess = !isExecuting && lastResult && lastResult.success;
   const isFailed = !isExecuting && lastResult && !lastResult.success;
 
+  const handleDismiss = () => {
+    if (isExecutingPill && activeAction) {
+      setDismissedExecutionId(activeAction.actionId);
+    } else if (isCompletedPill && lastResult) {
+      setDismissedResultId(lastResult.actionId);
+    }
+  };
+
   return (
     <div
       data-testid="action-notification-pill"
-      className={`fixed top-6 left-1/2 -translate-x-1/2 z-50 transition-all duration-300 transform ${
-        visible ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-2 pointer-events-none"
-      }`}
+      className="fixed top-6 left-1/2 -translate-x-1/2 z-50 transition-all duration-300 transform opacity-100 translate-y-0"
     >
       <div
         className={`flex items-center gap-3 px-4 py-2.5 rounded-2xl border backdrop-blur-2xl shadow-2xl transition-all ${
@@ -134,7 +148,6 @@ export const ActionNotificationPill: React.FC = () => {
             : "bg-[#070b16]/90 border-cyan-500/30 text-cyan-200"
         }`}
       >
-        {/* State Icon Indicator */}
         <div
           className={`flex items-center justify-center w-7 h-7 rounded-xl border ${
             isExecuting
@@ -153,7 +166,6 @@ export const ActionNotificationPill: React.FC = () => {
           )}
         </div>
 
-        {/* Content Details */}
         <div className="flex flex-col">
           <div className="flex items-center gap-2">
             <span className="flex items-center gap-1 text-[10px] font-bold tracking-[0.16em] uppercase opacity-75">
@@ -171,9 +183,8 @@ export const ActionNotificationPill: React.FC = () => {
           </span>
         </div>
 
-        {/* Dismiss Button */}
         <button
-          onClick={() => setDismissed(true)}
+          onClick={handleDismiss}
           className="ml-1 p-1 rounded-lg text-slate-400 hover:text-white hover:bg-white/[0.1] transition-colors"
           aria-label="Dismiss action notification"
         >
@@ -183,4 +194,5 @@ export const ActionNotificationPill: React.FC = () => {
     </div>
   );
 };
+
 export default ActionNotificationPill;
