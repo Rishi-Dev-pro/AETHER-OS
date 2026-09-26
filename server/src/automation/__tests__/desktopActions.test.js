@@ -161,7 +161,7 @@ describe("Phase 10 M1: Unified Action Dispatcher", () => {
       assert.ok(res.message.includes("Opened Notepad"));
       assert.ok(captured, "execFile should have been invoked");
       assert.equal(captured.file, "powershell.exe");
-      assert.ok(captured.args.some((a) => a.includes("Start-Process -FilePath 'notepad'")));
+      assert.ok(captured.args.some((a) => a.includes("ShellExecute") && a.includes("notepad.exe")));
     } finally {
       _setExecFile(null);
     }

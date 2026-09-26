@@ -44,15 +44,19 @@ import {
  */
 function launchDetachedProcess(target, args = []) {
   return new Promise((resolve, reject) => {
-    const escapedTarget = target.replace(/'/g, "''");
-    const argsStr = args.length
-      ? ` -ArgumentList ${args.map((a) => `'${a.replace(/'/g, "''")}'`).join(", ")}`
-      : "";
-    const psScript = `Start-Process -FilePath '${escapedTarget}'${argsStr}`;
+    let resolvedTarget = target;
+    // Append .exe if plain command name without extension or URI scheme
+    if (!resolvedTarget.includes(":") && !resolvedTarget.includes(".")) {
+      resolvedTarget = `${resolvedTarget}.exe`;
+    }
+    const escapedTarget = resolvedTarget.replace(/'/g, "''");
+    const escapedArgs = args.join(" ").replace(/'/g, "''");
+    // ShowCmd 1 = SW_SHOWNORMAL via Windows Explorer Shell COM in user's interactive desktop
+    const psScript = `(New-Object -ComObject Shell.Application).ShellExecute('${escapedTarget}', '${escapedArgs}', '', 'open', 1)`;
 
     execFileFn(
       "powershell.exe",
-      ["-NoProfile", "-NonInteractive", "-Command", psScript],
+      ["-NoProfile", "-Command", psScript],
       { timeout: 5000 },
       (err, _stdout, stderr) => {
         if (err) {
@@ -67,9 +71,8 @@ function launchDetachedProcess(target, args = []) {
 }
 
 /**
- * Opens a validated URL in the default web browser via PowerShell Start-Process.
- * Avoids cmd.exe shell interpretation of '&', '?', and '%' in URLs.
- * Waits for PowerShell execution to complete with exit code 0 before reporting success.
+ * Opens a validated URL in the default web browser via Windows Shell.Application COM.
+ * Avoids cmd.exe shell interpretation of '&', '?', and '%' in URLs and ensures interactive window presentation.
  * @param {string} url
  * @returns {Promise<void>}
  */
@@ -77,11 +80,11 @@ function openUrlSafely(url) {
   return new Promise((resolve, reject) => {
     // Single quotes inside PowerShell single-quoted string are escaped by doubling them ('')
     const escapedUrl = url.replace(/'/g, "''");
-    const psScript = `Start-Process -FilePath '${escapedUrl}'`;
+    const psScript = `(New-Object -ComObject Shell.Application).ShellExecute('${escapedUrl}', '', '', 'open', 1)`;
 
     execFileFn(
       "powershell.exe",
-      ["-NoProfile", "-NonInteractive", "-Command", psScript],
+      ["-NoProfile", "-Command", psScript],
       { timeout: 5000 },
       (err, _stdout, stderr) => {
         if (err) {
