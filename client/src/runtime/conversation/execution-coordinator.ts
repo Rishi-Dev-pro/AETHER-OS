@@ -18,6 +18,7 @@ import type { ConversationHistory } from "./conversation-history";
 import type { RuntimeEvents } from "./runtime-events";
 import type { RuntimeDiagnostics } from "./runtime-diagnostics";
 import type { ExecutionResult, ConversationTurn, ConversationMessage } from "./conversation-types";
+import type { StreamingChunk, StreamingFinishReason } from "../streaming/streaming-contracts";
 import { ExecutionCoordinatorError } from "./conversation-errors";
 import { ResilienceCoordinator, resilienceCoordinator } from "../resilience/resilience-coordinator";
 import { offlineDetector } from "../resilience/offline-detector";
@@ -146,14 +147,83 @@ export class ExecutionCoordinator {
     // Rule 2: Protect recent 3 turns (approx 6 messages)
     const protectedCount = Math.min(activeMessages.length, 6);
 
-    // Rule 4: Sliding window pruning of oldest non-protected messages
-    while (totalEstimated > availableInputBudget && activeMessages.length > protectedCount) {
-      const removed = activeMessages.shift();
-      if (removed) {
-        prunedCount++;
-        const removedExtra = removed.role === "assistant" ? removed.toolCalls : undefined;
-        totalEstimated -= estimateTokens(removed.content || removedExtra);
+    // Preserve the latest user message and every message after it, including tool-call and tool-result context
+    let latestUserIndex = -1;
+    for (let i = activeMessages.length - 1; i >= 0; i--) {
+      if (activeMessages[i].role === "user") {
+        latestUserIndex = i;
+        break;
       }
+    }
+    const minRequiredMessages =
+      latestUserIndex >= 0 ? activeMessages.length - latestUserIndex : 1;
+
+    // Rule 4: Sliding window pruning of oldest messages by turn
+    while (totalEstimated > availableInputBudget && activeMessages.length > minRequiredMessages) {
+      const nextCandidate = activeMessages[0];
+      let attachedToolCount = 0;
+
+      if (
+        nextCandidate &&
+        nextCandidate.role === "assistant" &&
+        nextCandidate.toolCalls &&
+        nextCandidate.toolCalls.length > 0
+      ) {
+        while (
+          1 + attachedToolCount < activeMessages.length &&
+          activeMessages[1 + attachedToolCount].role === "tool"
+        ) {
+          attachedToolCount++;
+        }
+      }
+
+      const turnSize = 1 + attachedToolCount;
+
+      // Preserving an assistant-and-tool group cannot return a request that exceeds availableInputBudget.
+      // If we are within the protected boundary, we only preserve if the budget is already satisfied;
+      // otherwise, we continue pruning by conversational turn until budget is satisfied or only required context remains.
+      if (
+        activeMessages.length <= protectedCount &&
+        totalEstimated <= availableInputBudget
+      ) {
+        break;
+      }
+
+      // Ensure pruning this turn does not discard the minimum required context
+      if (activeMessages.length - turnSize < minRequiredMessages) {
+        break;
+      }
+
+      // Prune the conversational turn atomically (assistant message + all attached tool messages)
+      for (let i = 0; i < turnSize; i++) {
+        const removed = activeMessages.shift();
+        if (removed) {
+          prunedCount++;
+          const removedPayload =
+            removed.role === "assistant"
+              ? removed.toolCalls
+              : removed.role === "tool"
+              ? removed.toolCallId
+              : undefined;
+          totalEstimated -= estimateTokens(removed.content || removedPayload);
+        }
+      }
+    }
+
+    // Post-pruning sanity pass: ensure the first non-system message is never an orphaned 'tool' role message
+    while (activeMessages.length > 0 && activeMessages[0].role === "tool") {
+      const removedTool = activeMessages.shift();
+      if (removedTool && removedTool.role === "tool") {
+        prunedCount++;
+        totalEstimated -= estimateTokens(removedTool.content || removedTool.toolCallId);
+      }
+    }
+
+    // Fail explicitly when the required context cannot fit into availableInputBudget
+    if (totalEstimated > availableInputBudget) {
+      throw new ExecutionCoordinatorError(
+        `Cannot fit required conversation context into available token budget (${availableInputBudget} tokens). Estimated tokens: ${totalEstimated}.`
+      );
     }
 
     if (prunedCount > 0) {
@@ -423,6 +493,109 @@ export class ExecutionCoordinator {
         currentRequest = this.prepareRequestContext(conversationId, executionId, targetModel);
       }
 
+      // If loop completed because MAX_TOOL_TURNS was reached while tools were executed,
+      // request a final wrap-up answer from the model with tools disabled.
+      const currentMessages = this.state.getMessages();
+      const lastMsgInState = currentMessages[currentMessages.length - 1];
+      if (lastMsgInState && lastMsgInState.role === "tool") {
+        const wrapUpRequest = this.prepareRequestContext(
+          conversationId,
+          executionId,
+          targetModel,
+          8192,
+          1000,
+          []
+        );
+
+        this.events.emit({
+          eventId: `evt_${Date.now()}_req_wrapup`,
+          type: "RequestDispatched",
+          conversationId,
+          executionId,
+          request: wrapUpRequest,
+          timestamp: Date.now(),
+        });
+
+        const wrapUpResult = await this.resilience.executeWithResilience<TranslationResponse>({
+          adapterId: targetAdapter,
+          modelId: targetModel,
+          executeFn: async (activeAdapter, activeModel) => {
+            const req: TranslationRequest = {
+              ...wrapUpRequest,
+              modelId: activeModel,
+            };
+            return this.runtime.execute(activeAdapter, req);
+          },
+          onRetry: (attempt, delayMs, reason) => {
+            this.events.emit({
+              eventId: `evt_${Date.now()}_retry_wrapup`,
+              type: "RetryScheduled",
+              conversationId,
+              executionId,
+              attempt,
+              delayMs,
+              reason,
+              timestamp: Date.now(),
+            });
+          },
+          onFailover: (fromAdapter, toAdapter, reason) => {
+            this.events.emit({
+              eventId: `evt_${Date.now()}_failover_wrapup`,
+              type: "ProviderFailover",
+              conversationId,
+              executionId,
+              fromProvider: fromAdapter,
+              toProvider: toAdapter,
+              reason,
+              timestamp: Date.now(),
+            });
+            const newTargetProvider = toAdapter.replace("-adapter", "-provider");
+            const newModel = toAdapter.includes("nvidia")
+              ? "nvidia/nvidia-nemotron-nano-9b-v2"
+              : toAdapter.includes("openai")
+              ? "gpt-4o"
+              : "openai/gpt-oss-120b";
+            this.state.setProviderAndModel(newTargetProvider, newModel);
+            this.diagnostics.setActiveProviderAndModel(newTargetProvider, newModel);
+          },
+          onCircuitChange: (provId, state) => {
+            this.events.emit({
+              eventId: `evt_${Date.now()}_cb_wrapup`,
+              type: "CircuitBreakerChanged",
+              conversationId,
+              providerId: provId,
+              state,
+              timestamp: Date.now(),
+            });
+          },
+        });
+
+        finalResponse = wrapUpResult.result;
+        finalAdapter = wrapUpResult.resolvedProvider;
+        finalModel = wrapUpResult.resolvedModel;
+
+        this.events.emit({
+          eventId: `evt_${Date.now()}_res_wrapup`,
+          type: "ResponseReceived",
+          conversationId,
+          executionId,
+          response: finalResponse,
+          timestamp: Date.now(),
+        });
+
+        const wrapUpContent = finalResponse.message?.content || "";
+        lastAssistantMessage = this.state.appendAssistantMessage(wrapUpContent);
+
+        this.events.emit({
+          eventId: `evt_${Date.now()}_msg_ast_wrapup`,
+          type: "ConversationUpdated",
+          conversationId,
+          message: lastAssistantMessage,
+          totalMessages: this.state.getMessages().length,
+          timestamp: Date.now(),
+        });
+      }
+
       if (!finalResponse) {
         throw new ExecutionCoordinatorError("Execution did not produce a translation response.");
       }
@@ -629,36 +802,44 @@ export class ExecutionCoordinator {
       timestamp: Date.now(),
     });
 
-    const translationRequest = this.prepareRequestContext(conversationId, executionId, targetModel);
-
-    this.events.emit({
-      eventId: `evt_${Date.now()}_req`,
-      type: "RequestDispatched",
-      conversationId,
-      executionId,
-      request: translationRequest,
-      timestamp: Date.now(),
-    });
-
-    const assistantMessage = this.state.appendAssistantMessage("");
-
     let accumulatedContent = "";
     let accumulatedReasoning = "";
     let chunksCount = 0;
-    let finishReason: "stop" | "length" | "tool_calls" | "content_filter" | "error" = "stop";
+    let finishReason: StreamingFinishReason = "stop";
+    let isDispatched = false;
 
     try {
+      // In streaming mode, disable tools explicitly (tools: []) so the model responds conversationally
+      // without returning raw tool calling tokens, pending full streaming tool recursion in Milestone 5.
+      const translationRequest = this.prepareRequestContext(
+        conversationId,
+        executionId,
+        targetModel,
+        8192,
+        1000,
+        []
+      );
+
+      this.events.emit({
+        eventId: `evt_${Date.now()}_req`,
+        type: "RequestDispatched",
+        conversationId,
+        executionId,
+        request: translationRequest,
+        timestamp: Date.now(),
+      });
+
+      isDispatched = true;
+
+      const assistantMessage = this.state.appendAssistantMessage("");
+
       const runtimeStreaming = this.runtime as unknown as {
         executeStreaming?: (
           adapterId: string,
           req: TranslationRequest,
           options?: unknown,
           signal?: AbortSignal
-        ) => AsyncIterable<{
-          deltaContent?: string;
-          deltaReasoning?: string;
-          finishReason?: "stop" | "length" | "tool_calls" | "content_filter" | "error";
-        }>;
+        ) => AsyncIterable<StreamingChunk>;
       };
 
       const chunkStream = runtimeStreaming.executeStreaming
@@ -728,6 +909,9 @@ export class ExecutionCoordinator {
         estimatedCostUSD: (promptTokens + completionTokens) * 0.000001,
       };
 
+      const mappedFinishReason: "stop" | "length" | "tool_calls" | "content_filter" | "error" =
+        finishReason === "cancelled" ? "error" : finishReason;
+
       const response: TranslationResponse = {
         responseId: `resp_${executionId}`,
         requestId: translationRequest.requestId,
@@ -739,7 +923,7 @@ export class ExecutionCoordinator {
           reasoningContent: accumulatedReasoning || undefined,
           timestamp: Date.now(),
         },
-        finishReason,
+        finishReason: mappedFinishReason,
         usage,
         timestamp: Date.now(),
       };
@@ -820,7 +1004,9 @@ export class ExecutionCoordinator {
           timestamp: Date.now(),
         });
       } else {
-        this.resilience.getCircuitBreakerEngine().recordFailure(targetAdapter);
+        if (isDispatched) {
+          this.resilience.getCircuitBreakerEngine().recordFailure(targetAdapter);
+        }
         if (
           (err instanceof Error && err instanceof ExecutionTimeoutError) ||
           (typeof err === "object" && err !== null && (err as { name?: string }).name === "ExecutionTimeoutError")

@@ -198,5 +198,5 @@ describe("AETHER OS — Live Credential & Provider Execution Audit", () => {
     console.log(`- Assistant Message: "${snapshot.messages.find(m => m.role === 'assistant')?.content}"`);
 
     expect(assistantMsgAppended).toBe(true);
-  });
+  }, 15000);
 });

@@ -12,7 +12,7 @@
  */
 
 import { create } from "zustand";
-import type { ConversationStateSnapshot } from "../conversation/conversation-types";
+import type { ConversationRole, ConversationStateSnapshot } from "../conversation/conversation-types";
 import type { SessionMetadata } from "../conversation/session-types";
 
 /**
@@ -20,7 +20,7 @@ import type { SessionMetadata } from "../conversation/session-types";
  */
 export interface FrontendMessage {
   readonly id: string;
-  readonly role: "system" | "user" | "assistant";
+  readonly role: ConversationRole;
   readonly content: string;
   readonly timestamp: number;
   readonly providerId?: string;
@@ -33,6 +33,8 @@ export interface FrontendMessage {
   };
   readonly status?: "PENDING" | "COMPLETED" | "FAILED";
   readonly error?: string;
+  readonly toolCallId?: string;
+  readonly name?: string;
 }
 
 /**

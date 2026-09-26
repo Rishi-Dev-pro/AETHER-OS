@@ -42,6 +42,8 @@ function syncMessagesFromSnapshot(conversationRuntime: ConversationRuntime, stat
       providerId: snapshot.activeProvider,
       modelId: snapshot.activeModel,
       status,
+      ...(m.toolCallId ? { toolCallId: m.toolCallId } : {}),
+      ...(m.name ? { name: m.name } : {}),
     }));
 
     const storeInstance = useConversationStore.getState();

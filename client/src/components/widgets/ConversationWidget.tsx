@@ -16,6 +16,7 @@ import {
   Edit2,
   Check,
   X,
+  Terminal,
 } from "lucide-react";
 import { setTTSEnabled, isTTSEnabled } from "../../runtime/frontend/speech-runtime";
 
@@ -309,8 +310,45 @@ export default function ConversationWidget() {
           </div>
         ) : (
           messages.map((msg, idx) => {
+            if (msg.role === "system") {
+              return null;
+            }
+
+            if (msg.role === "tool") {
+              let displayInfo = msg.content;
+              let isSuccess = true;
+              try {
+                const parsed = JSON.parse(msg.content);
+                if (parsed.message) {
+                  displayInfo = parsed.message;
+                } else if (parsed.error) {
+                  displayInfo = parsed.error;
+                }
+                if (parsed.success !== undefined) {
+                  isSuccess = Boolean(parsed.success);
+                }
+              } catch {
+                // raw string content
+              }
+
+              return (
+                <div
+                  key={msg.id}
+                  className="flex items-center gap-1.5 my-1 px-2.5 py-1.5 rounded-md bg-slate-900/70 border border-slate-700/40 text-[8px] font-mono max-w-[92%] animate-fadeIn"
+                >
+                  <Terminal size={10} className={isSuccess ? "text-cyan-400 shrink-0" : "text-amber-400 shrink-0"} />
+                  <span className="text-cyan-300 font-semibold uppercase">{msg.name || "TOOL"}:</span>
+                  <span className="truncate text-slate-300">{displayInfo}</span>
+                </div>
+              );
+            }
+
             const isLatestAssistant =
               msg.role === "assistant" && idx === messages.length - 1 && isStreaming;
+
+            if (msg.role === "assistant" && !msg.content && !isLatestAssistant) {
+              return null;
+            }
 
             return (
               <div

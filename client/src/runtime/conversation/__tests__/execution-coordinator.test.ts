@@ -152,7 +152,7 @@ describe("Phase 9.11 Milestone 2 Execution Coordinator Unit Tests", () => {
     expect(history.listTurns()[0].status).toBe("COMPLETED");
   });
 
-  it("should stop re-invoking LLM after reaching MAX_TOOL_TURNS limit", async () => {
+  it("should stop tool execution loop at MAX_TOOL_TURNS limit and perform final conversational wrap-up", async () => {
     vi.spyOn(desktopActionDispatcher, "dispatch").mockResolvedValue({
       actionId: "act_test_vol",
       type: "adjust_volume",
@@ -186,15 +186,33 @@ describe("Phase 9.11 Milestone 2 Execution Coordinator Unit Tests", () => {
     };
 
     let executionCount = 0;
-    runtime.execute = async () => {
+    runtime.execute = async (_adapter, req) => {
       executionCount++;
+      if (!req.tools || req.tools.length === 0) {
+        return {
+          responseId: "resp_wrapup",
+          requestId: req.requestId,
+          modelId: "llama-3.3-70b-versatile",
+          message: {
+            id: "msg_wrapup",
+            role: "assistant",
+            content: "Max action iterations reached. Actions completed.",
+            timestamp: Date.now(),
+          },
+          finishReason: "stop",
+          usage: { promptTokens: 10, completionTokens: 10, totalTokens: 20 },
+          timestamp: Date.now(),
+        };
+      }
       return infiniteToolResponse;
     };
 
     const result = await coordinator.execute("groq-adapter", "Turn it up indefinitely");
 
-    // Loop capped at MAX_TOOL_TURNS (3)
-    expect(executionCount).toBe(3);
-    expect(result.response.finishReason).toBe("tool_calls");
+    // Tool loop capped at MAX_TOOL_TURNS (3) + 1 final conversational wrap-up = 4
+    expect(executionCount).toBe(4);
+    expect(result.response.finishReason).toBe("stop");
+    expect(result.response.message.content).toBe("Max action iterations reached. Actions completed.");
+    expect(result.turn.assistantMessage?.content).toBe("Max action iterations reached. Actions completed.");
   });
 });

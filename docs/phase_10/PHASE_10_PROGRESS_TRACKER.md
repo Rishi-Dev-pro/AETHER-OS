@@ -57,6 +57,10 @@
 - [x] Update `client/src/runtime/conversation/execution-coordinator.ts` to detect and execute tool calls
 - [x] Feed tool execution results back into conversation context
 - [x] Verify multi-turn conversational tool execution (`desktop-tools.test.ts` & `execution-coordinator.test.ts`, 21/21 passing)
+- [ ] **Remediate Post-Commit Audit Issues** (See [PHASE_10_MILESTONE_4_KNOWN_ISSUES_AUDIT.md](file:///d:/projects%202.0/main/AETHER-OS/docs/phase_10/PHASE_10_MILESTONE_4_KNOWN_ISSUES_AUDIT.md))
+  - 🚨 Fix 3 TypeScript compiler errors breaking `npm run build` (`StreamingChunk` & `ConversationRole`)
+  - ⚠️ Guard streaming tool calls and context pruning tool-message invariants
+
 
 ### Milestone 5: HUD Visual Action Feedback & DevTools Action Tab
 - [ ] Create `client/src/components/hud/ActionNotificationPill.tsx`

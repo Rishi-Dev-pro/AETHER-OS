@@ -88,6 +88,8 @@ export async function initializeRuntimeBridge(
     providerId: snapshot.activeProvider,
     modelId: snapshot.activeModel,
     status: "COMPLETED",
+    ...(m.toolCallId ? { toolCallId: m.toolCallId } : {}),
+    ...(m.name ? { name: m.name } : {}),
   }));
   store.setMessages(frontendMessages);
   store.setProviderAndModel(
