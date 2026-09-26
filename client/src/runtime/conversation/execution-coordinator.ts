@@ -17,11 +17,14 @@ import type { ConversationState } from "./conversation-state";
 import type { ConversationHistory } from "./conversation-history";
 import type { RuntimeEvents } from "./runtime-events";
 import type { RuntimeDiagnostics } from "./runtime-diagnostics";
-import type { ExecutionResult, ConversationTurn } from "./conversation-types";
+import type { ExecutionResult, ConversationTurn, ConversationMessage } from "./conversation-types";
 import { ExecutionCoordinatorError } from "./conversation-errors";
 import { ResilienceCoordinator, resilienceCoordinator } from "../resilience/resilience-coordinator";
 import { offlineDetector } from "../resilience/offline-detector";
 import { OfflineError, ExecutionTimeoutError } from "../resilience/resilience-errors";
+import { getDesktopToolDefinitions, executeDesktopTool } from "../tools/desktop-tools";
+
+const MAX_TOOL_TURNS = 3;
 
 /**
  * Helper to deeply freeze objects recursively.
@@ -32,7 +35,7 @@ function deepFreeze<T>(obj: T): Readonly<T> {
   }
   Object.freeze(obj);
   for (const key of Object.getOwnPropertyNames(obj)) {
-    const value = (obj as any)[key];
+    const value = (obj as Record<string, unknown>)[key];
     if (value !== null && typeof value === "object" && !Object.isFrozen(value)) {
       deepFreeze(value);
     }
@@ -75,7 +78,8 @@ export class ExecutionCoordinator {
     executionId: string,
     targetModel: string,
     targetMaxTokens = 8192,
-    reserveOutputTokens = 1000
+    reserveOutputTokens = 1000,
+    tools?: ReadonlyArray<Readonly<Record<string, unknown>>>
   ): TranslationRequest {
     const rawMessages = this.state.getMessages();
     const systemPrompt = this.state.getSystemPrompt();
@@ -88,15 +92,55 @@ export class ExecutionCoordinator {
     const systemTokens = estimateTokens(systemPrompt);
     const availableInputBudget = Math.max(500, targetMaxTokens - reserveOutputTokens);
 
-    const canonicalMessages: CanonicalMessage[] = rawMessages.map((m) => ({
-      id: m.id,
-      role: m.role as any,
-      content: m.content,
-      timestamp: m.timestamp,
-    }));
+    const canonicalMessages: CanonicalMessage[] = rawMessages.map((m) => {
+      if (m.role === "tool") {
+        return {
+          id: m.id,
+          role: "tool",
+          toolCallId: m.toolCallId || "",
+          name: m.name || "",
+          content: m.content,
+          timestamp: m.timestamp,
+        };
+      }
+      if (m.role === "assistant") {
+        return {
+          id: m.id,
+          role: "assistant",
+          ...(m.content ? { content: m.content } : {}),
+          ...(m.toolCalls && m.toolCalls.length > 0 ? { toolCalls: m.toolCalls } : {}),
+          timestamp: m.timestamp,
+        };
+      }
+      if (m.role === "user") {
+        return {
+          id: m.id,
+          role: "user",
+          content: m.content,
+          ...(m.name ? { name: m.name } : {}),
+          timestamp: m.timestamp,
+        };
+      }
+      return {
+        id: m.id,
+        role: "system",
+        content: m.content,
+        timestamp: m.timestamp,
+      };
+    });
 
     const activeMessages = [...canonicalMessages];
-    let totalEstimated = systemTokens + activeMessages.reduce((acc, m) => acc + estimateTokens(m.content), 0);
+    let totalEstimated =
+      systemTokens +
+      activeMessages.reduce((acc, m) => {
+        let toolPayload: unknown;
+        if (m.role === "assistant") {
+          toolPayload = m.toolCalls;
+        } else if (m.role === "tool") {
+          toolPayload = m.toolCallId;
+        }
+        return acc + estimateTokens(m.content || toolPayload);
+      }, 0);
 
     let prunedCount = 0;
     // Rule 2: Protect recent 3 turns (approx 6 messages)
@@ -107,7 +151,8 @@ export class ExecutionCoordinator {
       const removed = activeMessages.shift();
       if (removed) {
         prunedCount++;
-        totalEstimated -= estimateTokens(removed.content);
+        const removedExtra = removed.role === "assistant" ? removed.toolCalls : undefined;
+        totalEstimated -= estimateTokens(removed.content || removedExtra);
       }
     }
 
@@ -123,6 +168,8 @@ export class ExecutionCoordinator {
       });
     }
 
+    const toolsPayload = tools !== undefined ? tools : getDesktopToolDefinitions();
+
     const request: TranslationRequest = {
       requestId: `req_${executionId}`,
       modelId: targetModel,
@@ -131,6 +178,7 @@ export class ExecutionCoordinator {
         messages: activeMessages,
       },
       systemInstruction: systemPrompt,
+      ...(toolsPayload && toolsPayload.length > 0 ? { tools: toolsPayload } : {}),
     };
 
     this.validateRequest(request);
@@ -202,109 +250,190 @@ export class ExecutionCoordinator {
       timestamp: Date.now(),
     });
 
-    // 6. Build TranslationRequest with context pruning and token budgeting
-    const translationRequest = this.prepareRequestContext(conversationId, executionId, targetModel);
-
-    // 7. Emit RequestDispatched event
-    this.events.emit({
-      eventId: `evt_${Date.now()}_req`,
-      type: "RequestDispatched",
-      conversationId,
-      executionId,
-      request: translationRequest,
-      timestamp: Date.now(),
-    });
-
     try {
-      // 8. Execute request through ResilienceCoordinator
-      const resilienceResult = await this.resilience.executeWithResilience<TranslationResponse>({
-        adapterId: targetAdapter,
-        modelId: targetModel,
-        executeFn: async (activeAdapter, activeModel) => {
-          const req: TranslationRequest = {
-            ...translationRequest,
-            modelId: activeModel,
-          };
-          return this.runtime.execute(activeAdapter, req);
-        },
-        onRetry: (attempt, delayMs, reason) => {
-          this.events.emit({
-            eventId: `evt_${Date.now()}_retry`,
-            type: "RetryScheduled",
-            conversationId,
-            executionId,
-            attempt,
-            delayMs,
-            reason,
-            timestamp: Date.now(),
-          });
-        },
-        onFailover: (fromAdapter, toAdapter, reason) => {
-          this.events.emit({
-            eventId: `evt_${Date.now()}_failover`,
-            type: "ProviderFailover",
-            conversationId,
-            executionId,
-            fromProvider: fromAdapter,
-            toProvider: toAdapter,
-            reason,
-            timestamp: Date.now(),
-          });
-          const newTargetProvider = toAdapter.replace("-adapter", "-provider");
-          const newModel = toAdapter.includes("nvidia")
-            ? "nvidia/nvidia-nemotron-nano-9b-v2"
-            : toAdapter.includes("openai")
-            ? "gpt-4o"
-            : "openai/gpt-oss-120b";
-          this.state.setProviderAndModel(newTargetProvider, newModel);
-          this.diagnostics.setActiveProviderAndModel(newTargetProvider, newModel);
-        },
-        onCircuitChange: (provId, state) => {
-          this.events.emit({
-            eventId: `evt_${Date.now()}_cb`,
-            type: "CircuitBreakerChanged",
-            conversationId,
-            providerId: provId,
-            state,
-            timestamp: Date.now(),
-          });
-        },
-      });
+      let turnCount = 0;
+      let finalResponse: TranslationResponse | null = null;
+      let lastAssistantMessage: ConversationMessage | null = null;
+      let finalAdapter = targetAdapter;
+      let finalModel = targetModel;
+      let currentRequest = this.prepareRequestContext(conversationId, executionId, targetModel);
 
-      const response: TranslationResponse = resilienceResult.result;
-      const finalAdapter = resilienceResult.resolvedProvider;
-      const finalModel = resilienceResult.resolvedModel;
+      while (turnCount < MAX_TOOL_TURNS) {
+        // 6. Emit RequestDispatched event
+        this.events.emit({
+          eventId: `evt_${Date.now()}_req_${turnCount}`,
+          type: "RequestDispatched",
+          conversationId,
+          executionId,
+          request: currentRequest,
+          timestamp: Date.now(),
+        });
+
+        // 8. Execute request through ResilienceCoordinator
+        const resilienceResult = await this.resilience.executeWithResilience<TranslationResponse>({
+          adapterId: targetAdapter,
+          modelId: targetModel,
+          executeFn: async (activeAdapter, activeModel) => {
+            const req: TranslationRequest = {
+              ...currentRequest,
+              modelId: activeModel,
+            };
+            return this.runtime.execute(activeAdapter, req);
+          },
+          onRetry: (attempt, delayMs, reason) => {
+            this.events.emit({
+              eventId: `evt_${Date.now()}_retry_${turnCount}`,
+              type: "RetryScheduled",
+              conversationId,
+              executionId,
+              attempt,
+              delayMs,
+              reason,
+              timestamp: Date.now(),
+            });
+          },
+          onFailover: (fromAdapter, toAdapter, reason) => {
+            this.events.emit({
+              eventId: `evt_${Date.now()}_failover_${turnCount}`,
+              type: "ProviderFailover",
+              conversationId,
+              executionId,
+              fromProvider: fromAdapter,
+              toProvider: toAdapter,
+              reason,
+              timestamp: Date.now(),
+            });
+            const newTargetProvider = toAdapter.replace("-adapter", "-provider");
+            const newModel = toAdapter.includes("nvidia")
+              ? "nvidia/nvidia-nemotron-nano-9b-v2"
+              : toAdapter.includes("openai")
+              ? "gpt-4o"
+              : "openai/gpt-oss-120b";
+            this.state.setProviderAndModel(newTargetProvider, newModel);
+            this.diagnostics.setActiveProviderAndModel(newTargetProvider, newModel);
+          },
+          onCircuitChange: (provId, state) => {
+            this.events.emit({
+              eventId: `evt_${Date.now()}_cb_${turnCount}`,
+              type: "CircuitBreakerChanged",
+              conversationId,
+              providerId: provId,
+              state,
+              timestamp: Date.now(),
+            });
+          },
+        });
+
+        const response: TranslationResponse = resilienceResult.result;
+        finalResponse = response;
+        finalAdapter = resilienceResult.resolvedProvider;
+        finalModel = resilienceResult.resolvedModel;
+
+        // 9. Emit ResponseReceived event
+        this.events.emit({
+          eventId: `evt_${Date.now()}_res_${turnCount}`,
+          type: "ResponseReceived",
+          conversationId,
+          executionId,
+          response,
+          timestamp: Date.now(),
+        });
+
+        const toolCalls = response.message?.toolCalls;
+        const hasToolCalls = Array.isArray(toolCalls) && toolCalls.length > 0;
+
+        // 10. Append Assistant Message to State
+        const assistantContent = response.message?.content || "";
+        const assistantMessage = this.state.appendAssistantMessage(
+          assistantContent,
+          undefined,
+          toolCalls
+        );
+        lastAssistantMessage = assistantMessage;
+
+        // 11. Emit ConversationUpdated event for Assistant Message
+        this.events.emit({
+          eventId: `evt_${Date.now()}_msg_ast_${turnCount}`,
+          type: "ConversationUpdated",
+          conversationId,
+          message: assistantMessage,
+          totalMessages: this.state.getMessages().length,
+          timestamp: Date.now(),
+        });
+
+        if (!hasToolCalls) {
+          break;
+        }
+
+        // 12. Execute tool calls and record outputs
+        turnCount++;
+        for (const tc of toolCalls!) {
+          this.events.emit({
+            eventId: `evt_${Date.now()}_tool_start_${tc.id}`,
+            type: "ToolExecutionStarted",
+            conversationId,
+            executionId,
+            toolCall: tc,
+            timestamp: Date.now(),
+          });
+
+          const toolExecResult = await executeDesktopTool(tc);
+
+          if (toolExecResult.success) {
+            this.events.emit({
+              eventId: `evt_${Date.now()}_tool_done_${tc.id}`,
+              type: "ToolExecutionCompleted",
+              conversationId,
+              executionId,
+              toolCallId: tc.id,
+              toolName: tc.name,
+              result: toolExecResult.result,
+              timestamp: Date.now(),
+            });
+          } else {
+            this.events.emit({
+              eventId: `evt_${Date.now()}_tool_fail_${tc.id}`,
+              type: "ToolExecutionFailed",
+              conversationId,
+              executionId,
+              toolCallId: tc.id,
+              toolName: tc.name,
+              error: toolExecResult.result.error || toolExecResult.result.message,
+              timestamp: Date.now(),
+            });
+          }
+
+          const toolMessage = this.state.appendToolMessage(
+            tc.id,
+            tc.name,
+            toolExecResult.content
+          );
+
+          this.events.emit({
+            eventId: `evt_${Date.now()}_msg_tool_${tc.id}`,
+            type: "ConversationUpdated",
+            conversationId,
+            message: toolMessage,
+            totalMessages: this.state.getMessages().length,
+            timestamp: Date.now(),
+          });
+        }
+
+        // Prepare context for follow-up LLM response
+        currentRequest = this.prepareRequestContext(conversationId, executionId, targetModel);
+      }
+
+      if (!finalResponse) {
+        throw new ExecutionCoordinatorError("Execution did not produce a translation response.");
+      }
+
       const durationMs = Date.now() - startTime;
 
-      // 9. Emit ResponseReceived event
-      this.events.emit({
-        eventId: `evt_${Date.now()}_res`,
-        type: "ResponseReceived",
-        conversationId,
-        executionId,
-        response,
-        timestamp: Date.now(),
-      });
-
-      // 10. Append Assistant Message to State
-      const assistantContent = response.message?.content || "";
-      const assistantMessage = this.state.appendAssistantMessage(assistantContent);
-
-      // 11. Emit ConversationUpdated event for Assistant Message
-      this.events.emit({
-        eventId: `evt_${Date.now()}_msg_ast`,
-        type: "ConversationUpdated",
-        conversationId,
-        message: assistantMessage,
-        totalMessages: this.state.getMessages().length,
-        timestamp: Date.now(),
-      });
-
-      // 12. Create Turn and Record in History
+      // 13. Create Turn and Record in History
       const turn: ConversationTurn = {
         turnId: `turn_${Date.now()}`,
         userMessage,
-        assistantMessage,
+        assistantMessage: lastAssistantMessage || undefined,
         status: "COMPLETED",
         providerId: finalAdapter,
         modelId: finalModel,
@@ -312,27 +441,27 @@ export class ExecutionCoordinator {
       };
       this.history.addTurn(turn);
 
-      // 13. Record Diagnostics
+      // 14. Record Diagnostics
       this.diagnostics.recordExecution(
         finalAdapter,
         finalModel,
-        response.usage,
+        finalResponse.usage,
         durationMs,
         true
       );
       this.diagnostics.setConversationMessageCount(this.state.getMessages().length);
 
-      // 14. Create ExecutionResult
+      // 15. Create ExecutionResult
       const result: ExecutionResult = deepFreeze({
         executionId,
         conversationId,
-        response,
+        response: finalResponse,
         turn,
         durationMs,
         timestamp: Date.now(),
       });
 
-      // 15. Emit ExecutionCompleted event
+      // 16. Emit ExecutionCompleted event
       this.events.emit({
         eventId: `evt_${Date.now()}_complete`,
         type: "ExecutionCompleted",
@@ -343,10 +472,10 @@ export class ExecutionCoordinator {
       });
 
       return result;
-    } catch (err: any) {
+    } catch (err: unknown) {
       const durationMs = Date.now() - startTime;
 
-      const errorMsg = err.message || "Execution failed";
+      const errorMsg = err instanceof Error ? err.message : "Execution failed";
 
       // Create Failed Turn and Record in History
       const failedTurn: ConversationTurn = {
@@ -516,15 +645,25 @@ export class ExecutionCoordinator {
     let accumulatedContent = "";
     let accumulatedReasoning = "";
     let chunksCount = 0;
-    let finishReason: any = "stop";
+    let finishReason: "stop" | "length" | "tool_calls" | "content_filter" | "error" = "stop";
 
     try {
-      const chunkStream = (this.runtime as any).executeStreaming(
-        targetAdapter,
-        translationRequest,
-        undefined,
-        signal
-      );
+      const runtimeStreaming = this.runtime as unknown as {
+        executeStreaming?: (
+          adapterId: string,
+          req: TranslationRequest,
+          options?: unknown,
+          signal?: AbortSignal
+        ) => AsyncIterable<{
+          deltaContent?: string;
+          deltaReasoning?: string;
+          finishReason?: "stop" | "length" | "tool_calls" | "content_filter" | "error";
+        }>;
+      };
+
+      const chunkStream = runtimeStreaming.executeStreaming
+        ? runtimeStreaming.executeStreaming(targetAdapter, translationRequest, undefined, signal)
+        : (async function* () {})();
 
       for await (const chunk of chunkStream) {
         if (signal?.aborted) {
@@ -666,9 +805,9 @@ export class ExecutionCoordinator {
       });
 
       return result;
-    } catch (err: any) {
+    } catch (err: unknown) {
       const durationMs = Date.now() - startTime;
-      const errorMsg = err.message || "Streaming failed";
+      const errorMsg = err instanceof Error ? err.message : "Streaming failed";
       const isCancelled = signal?.aborted || errorMsg.includes("cancelled");
 
       if (isCancelled) {
@@ -682,7 +821,10 @@ export class ExecutionCoordinator {
         });
       } else {
         this.resilience.getCircuitBreakerEngine().recordFailure(targetAdapter);
-        if (err instanceof ExecutionTimeoutError || err.name === "ExecutionTimeoutError") {
+        if (
+          (err instanceof Error && err instanceof ExecutionTimeoutError) ||
+          (typeof err === "object" && err !== null && (err as { name?: string }).name === "ExecutionTimeoutError")
+        ) {
           this.events.emit({
             eventId: `evt_${Date.now()}_str_timeout`,
             type: "ExecutionStreamTimeout",

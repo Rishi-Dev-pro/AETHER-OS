@@ -4,6 +4,7 @@ import { usePromptStore } from "../store/promptStore";
 import { promptBuilderOrchestrator } from "./promptBuilderOrchestrator";
 import { promptProfiler } from "./promptProfiler";
 import type { IntentResult } from "../types/intent";
+import type { PromptPackage } from "../types/prompt";
 
 class PromptManager {
   private unsubscribe: (() => void) | null = null;
@@ -37,6 +38,27 @@ class PromptManager {
     }
     this.isInitialized = false;
     this.lastIntentId = null;
+  }
+
+  /**
+   * Provides tool-use system instructions informing models about available native Windows desktop tools.
+   */
+  getDesktopAutomationInstructions(): string {
+    return (
+      "AETHER OS Desktop Automation Active.\n" +
+      "You have direct access to native Windows automation tools:\n" +
+      "- open_app(app): Launch desktop applications, browsers, utilities, or games.\n" +
+      "- close_app(app): Gracefully close or terminate running applications/processes.\n" +
+      "- search_web(query, engine): Search the web via default browser (google, bing, duckduckgo, youtube).\n" +
+      "- open_url(url): Navigate to a specific URL in the browser.\n" +
+      "- adjust_volume(direction, steps, level): Adjust master system audio.\n" +
+      "- mute_volume(), unmute_volume(): Mute/unmute master audio.\n" +
+      "- lock_screen(): Lock the Windows workstation session.\n" +
+      "- take_screenshot(): Capture a full desktop screenshot.\n" +
+      "- get_system_info(): Retrieve diagnostic hardware & OS metrics.\n\n" +
+      "Registered Applications: VS Code, Google Chrome, Spotify, Notepad, Calculator, Windows Terminal, File Explorer, Discord, Slack, Steam, Microsoft Edge, Task Manager, PowerShell, Settings.\n" +
+      "When the user requests opening, closing, searching, volume adjusting, or system control, invoke the appropriate desktop tool directly."
+    );
   }
 
   private processIntent(intent: IntentResult): void {
@@ -75,7 +97,7 @@ class PromptManager {
    */
   private logDebugReport(
     intent: IntentResult,
-    promptPkg: any,
+    promptPkg: PromptPackage,
     isSuccess: boolean
   ): void {
     // Only execute console log reports in development mode

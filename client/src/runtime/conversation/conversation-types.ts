@@ -10,12 +10,13 @@
  * @status FROZEN ARCHITECTURE SPECIFICATION — PHASE 9.11 MILESTONE 2
  */
 
-import type { TranslationResponse, TranslationRequest } from "../../types/provider-adapters/message-types";
+import type { TranslationResponse, TranslationRequest, ToolCallDescriptor } from "../../types/provider-adapters/message-types";
+import type { DesktopActionResult } from "../../types/desktopAction";
 
 /**
  * Standard conversation roles.
  */
-export type ConversationRole = "system" | "user" | "assistant";
+export type ConversationRole = "system" | "user" | "assistant" | "tool";
 
 /**
  * Canonical conversation message representation.
@@ -26,6 +27,9 @@ export interface ConversationMessage {
   readonly content: string;
   readonly timestamp: number;
   readonly metadata?: Record<string, unknown>;
+  readonly toolCalls?: ReadonlyArray<ToolCallDescriptor>;
+  readonly toolCallId?: string;
+  readonly name?: string;
 }
 
 /**
@@ -133,7 +137,10 @@ export type RuntimeEventType =
   | "ExecutionTimeout"
   | "CircuitBreakerChanged"
   | "OfflineDetected"
-  | "OnlineRecovered";
+  | "OnlineRecovered"
+  | "ToolExecutionStarted"
+  | "ToolExecutionCompleted"
+  | "ToolExecutionFailed";
 
 export interface BaseRuntimeEvent {
   readonly eventId: string;
@@ -301,6 +308,28 @@ export interface OnlineRecoveredEvent extends BaseRuntimeEvent {
   readonly type: "OnlineRecovered";
 }
 
+export interface ToolExecutionStartedEvent extends BaseRuntimeEvent {
+  readonly type: "ToolExecutionStarted";
+  readonly executionId: string;
+  readonly toolCall: ToolCallDescriptor;
+}
+
+export interface ToolExecutionCompletedEvent extends BaseRuntimeEvent {
+  readonly type: "ToolExecutionCompleted";
+  readonly executionId: string;
+  readonly toolCallId: string;
+  readonly toolName: string;
+  readonly result: DesktopActionResult;
+}
+
+export interface ToolExecutionFailedEvent extends BaseRuntimeEvent {
+  readonly type: "ToolExecutionFailed";
+  readonly executionId: string;
+  readonly toolCallId: string;
+  readonly toolName: string;
+  readonly error: string;
+}
+
 export type RuntimeEvent =
   | ExecutionStartedEvent
   | ProviderSelectedEvent
@@ -327,7 +356,10 @@ export type RuntimeEvent =
   | ExecutionTimeoutEvent
   | CircuitBreakerChangedEvent
   | OfflineDetectedEvent
-  | OnlineRecoveredEvent;
+  | OnlineRecoveredEvent
+  | ToolExecutionStartedEvent
+  | ToolExecutionCompletedEvent
+  | ToolExecutionFailedEvent;
 
 
 /**

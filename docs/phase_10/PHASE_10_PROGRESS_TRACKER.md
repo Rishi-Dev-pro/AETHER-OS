@@ -18,8 +18,8 @@
 │ M1  │ Windows Native Execution & Security Sandbox│ COMPLETED   │ 100%                  │
 │ M2  │ Socket.IO Action Protocol & Telemetry Bus  │ COMPLETED   │ 100%                  │
 │ M3  │ Frontend Action Dispatcher & Intent Routing│ COMPLETED   │ 100%                  │
-│ M4  │ LLM Tool Calling & Conversational Actions  │ IN PROGRESS │ 0%                    │
-│ M5  │ HUD Visual Action Feedback & DevTools Tab  │ PENDING     │ 0%                    │
+│ M4  │ LLM Tool Calling & Conversational Actions  │ COMPLETED   │ 100%                  │
+│ M5  │ HUD Visual Action Feedback & DevTools Tab  │ IN PROGRESS │ 0%                    │
 │ M6  │ End-to-End Integration & Quality Freeze    │ PENDING     │ 0%                    │
 └─────┴────────────────────────────────────────────┴─────────────┴───────────────────────┘
 ```
@@ -49,14 +49,14 @@
 - [x] Create `client/src/services/desktopActionDispatcher.ts` (Socket emitter & acknowledgment tracker)
 - [x] Connect `client/src/services/intentManager.ts` to trigger `desktopActionDispatcher` for system intents
 - [x] Connect Web Speech TTS confirmation (*"Opening Visual Studio Code"*, *"Muting volume"*)
-- [x] Verify with Vitest tests for intent-to-action routing (`client/src/services/__tests__/desktopActionDispatcher.test.ts`, 8/8 tests passing)
+- [x] Verify with Vitest tests for intent-to-action routing (`client/src/services/__tests__/desktopActionDispatcher.test.ts`, 12/12 tests passing)
 
 ### Milestone 4: LLM Tool Calling & Conversational Actions
-- [ ] Define desktop tools schema in `client/src/runtime/tools/desktop-tools.ts`
-- [ ] Update `client/src/services/promptManager.ts` with tool-use system instructions
-- [ ] Update `client/src/runtime/conversation/execution-coordinator.ts` to detect and execute tool calls
-- [ ] Feed tool execution results back into conversation context
-- [ ] Verify multi-turn conversational tool execution
+- [x] Define desktop tools schema in `client/src/runtime/tools/desktop-tools.ts`
+- [x] Update `client/src/services/promptManager.ts` with tool-use system instructions
+- [x] Update `client/src/runtime/conversation/execution-coordinator.ts` to detect and execute tool calls
+- [x] Feed tool execution results back into conversation context
+- [x] Verify multi-turn conversational tool execution (`desktop-tools.test.ts` & `execution-coordinator.test.ts`, 21/21 passing)
 
 ### Milestone 5: HUD Visual Action Feedback & DevTools Action Tab
 - [ ] Create `client/src/components/hud/ActionNotificationPill.tsx`

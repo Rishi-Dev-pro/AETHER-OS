@@ -20,7 +20,7 @@ class PromptProfiler {
         ],
         maxOutputTokens: 2048,
         fallbackStrategy: "fallback_conversation",
-        systemInstructions: "You are the AetherOS central nervous assistant. Your goal is to guide the user in local tasks, visual feedback, and automation controls. Respond using the requested parameters. Analyze focus coordinates and expressions to provide intelligent visual suggestions.",
+        systemInstructions: "You are the AetherOS central nervous assistant. Your goal is to guide the user in local tasks, visual feedback, and automation controls. Respond using the requested parameters. Analyze focus coordinates and expressions to provide intelligent visual suggestions. You can execute desktop automation tools (open_app, close_app, search_web, open_url, adjust_volume, mute_volume, lock_screen, take_screenshot, get_system_info) directly.",
       };
     }
 
@@ -34,7 +34,7 @@ class PromptProfiler {
         ],
         maxOutputTokens: 1024,
         fallbackStrategy: "fallback_conversation",
-        systemInstructions: "You are the AetherOS central nervous assistant. Respond using friendly, conversational, and direct guidance. Assist the user with system settings, shortcuts, or voice clarification.",
+        systemInstructions: "You are the AetherOS central nervous assistant. Respond using friendly, conversational, and direct guidance. Assist the user with system settings, desktop automation, shortcuts, or voice clarification. You can invoke desktop automation tools directly when requested.",
       };
     }
 

@@ -15,6 +15,7 @@ import type {
   ConversationRole,
   ConversationStateSnapshot,
 } from "./conversation-types";
+import type { ToolCallDescriptor } from "../../types/provider-adapters/message-types";
 import { ConversationStateError } from "./conversation-errors";
 
 /**
@@ -26,7 +27,7 @@ function deepFreeze<T>(obj: T): Readonly<T> {
   }
   Object.freeze(obj);
   for (const key of Object.getOwnPropertyNames(obj)) {
-    const value = (obj as any)[key];
+    const value = (obj as Record<string, unknown>)[key];
     if (value !== null && typeof value === "object" && !Object.isFrozen(value)) {
       deepFreeze(value);
     }
@@ -49,7 +50,7 @@ export class ConversationState {
 
   constructor(
     conversationId?: string,
-    systemPrompt: string = "You are AETHER OS, a powerful AI operating system assistant.",
+    systemPrompt: string = "You are AETHER OS, a powerful AI operating system assistant with native Windows desktop automation tools (open_app, close_app, search_web, open_url, adjust_volume, mute_volume, lock_screen, take_screenshot, get_system_info).",
     activeProvider: string = "groq-provider",
     activeModel: string = "openai/gpt-oss-120b"
   ) {
@@ -142,9 +143,50 @@ export class ConversationState {
 
   public appendAssistantMessage(
     content: string,
+    metadata?: Record<string, unknown>,
+    toolCalls?: ReadonlyArray<ToolCallDescriptor>
+  ): Readonly<ConversationMessage> {
+    this.messageCounter++;
+    const message: ConversationMessage = {
+      id: `msg_${this.messageCounter}_${Date.now()}`,
+      role: "assistant",
+      content: content ? content.trim() : "",
+      timestamp: Date.now(),
+      ...(metadata ? { metadata } : {}),
+      ...(toolCalls && toolCalls.length > 0 ? { toolCalls } : {}),
+    };
+
+    this.messages.push(message);
+    this.updatedAt = message.timestamp;
+    return deepFreeze({ ...message });
+  }
+
+  public appendToolMessage(
+    toolCallId: string,
+    name: string,
+    content: string,
     metadata?: Record<string, unknown>
   ): Readonly<ConversationMessage> {
-    return this.appendMessage("assistant", content, metadata);
+    if (!toolCallId || typeof toolCallId !== "string" || toolCallId.trim() === "") {
+      throw new ConversationStateError("Tool message requires a non-empty toolCallId.");
+    }
+    if (!name || typeof name !== "string" || name.trim() === "") {
+      throw new ConversationStateError("Tool message requires a non-empty name.");
+    }
+    this.messageCounter++;
+    const message: ConversationMessage = {
+      id: `msg_${this.messageCounter}_${Date.now()}`,
+      role: "tool",
+      content: content ? content.trim() : "",
+      toolCallId: toolCallId.trim(),
+      name: name.trim(),
+      timestamp: Date.now(),
+      ...(metadata ? { metadata } : {}),
+    };
+
+    this.messages.push(message);
+    this.updatedAt = message.timestamp;
+    return deepFreeze({ ...message });
   }
 
   public appendSystemMessage(content: string): Readonly<ConversationMessage> {
