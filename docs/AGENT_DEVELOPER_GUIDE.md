@@ -159,3 +159,11 @@ cmd /c npx vitest run
    - Store all cloud LLM API keys in backend environment configurations or in the in-memory `CredentialVault`.
 4. **Always Clean Up OS Subprocesses**:
    - Any child process spawned in `pythonBridge.js` must have registered shutdown hooks on `SIGINT`, `SIGTERM`, `exit`, and WebSocket disconnection events.
+
+---
+
+## 6. Key Reference Documents
+- [AETHER_OS_IMPROVEMENT_SPECIFICATION.md](file:///d:/projects%202.0/main/AETHER-OS/docs/AETHER_OS_IMPROVEMENT_SPECIFICATION.md): Master roadmap and technical specification covering UI/UX overhaul, vision performance, cursor smoothing, acoustic echo gating, and app session management.
+- [ARCHITECTURE_OVERVIEW.md](file:///d:/projects%202.0/main/AETHER-OS/docs/ARCHITECTURE_OVERVIEW.md): Comprehensive system architecture and data pipelines.
+- [PHASE_10_PROGRESS_TRACKER.md](file:///d:/projects%202.0/main/AETHER-OS/docs/phase_10/PHASE_10_PROGRESS_TRACKER.md): Phase 10 AI desktop automation milestone progress and status.
+
