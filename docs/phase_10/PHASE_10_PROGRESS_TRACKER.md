@@ -2,7 +2,7 @@
 
 > **Phase**: Phase 10  
 > **Status**: IN PROGRESS  
-> **Active Milestone**: Milestone 1 (Windows Native Execution & Security Sandbox)  
+> **Active Milestone**: Milestone 3 (Frontend Action Dispatcher & Fast-Path Intent Routing)  
 > **Last Updated**: 2026-09-26  
 
 ---
@@ -16,8 +16,8 @@
 │ ID  │ Milestone                                  │ Status      │ Completion Percentage │
 ├─────┼────────────────────────────────────────────┼─────────────┼───────────────────────┤
 │ M1  │ Windows Native Execution & Security Sandbox│ COMPLETED   │ 100%                  │
-│ M2  │ Socket.IO Action Protocol & Telemetry Bus  │ IN PROGRESS │ 0%                    │
-│ M3  │ Frontend Action Dispatcher & Intent Routing│ PENDING     │ 0%                    │
+│ M2  │ Socket.IO Action Protocol & Telemetry Bus  │ COMPLETED   │ 100%                  │
+│ M3  │ Frontend Action Dispatcher & Intent Routing│ IN PROGRESS │ 0%                    │
 │ M4  │ LLM Tool Calling & Conversational Actions  │ PENDING     │ 0%                    │
 │ M5  │ HUD Visual Action Feedback & DevTools Tab  │ PENDING     │ 0%                    │
 │ M6  │ End-to-End Integration & Quality Freeze    │ PENDING     │ 0%                    │
@@ -37,12 +37,12 @@
 - [x] Verify execution of app opening, web search, volume control, and injection prevention (14/14 tests passing)
 
 ### Milestone 2: Socket.IO Action Protocol & Telemetry Bus
-- [ ] Define action protocol interfaces in `server/src/automation/actionProtocol.js`
-- [ ] Refactor `server/src/automation/commandManager.js` to handle structured action lifecycle
-- [ ] Connect `os:action_request` event listener in `server/src/socket/socketEvents.js`
-- [ ] Emit `os:action_result` with latency telemetry and status
-- [ ] Add timeout protection (5000ms max per action execution)
-- [ ] Verify socket communication with a node test client
+- [x] Define action protocol interfaces in `server/src/automation/actionProtocol.js`
+- [x] Refactor `server/src/automation/commandManager.js` to handle structured action lifecycle
+- [x] Connect `os:action_request` event listener in `server/src/socket/socketEvents.js`
+- [x] Emit `os:action_result` with latency telemetry and status
+- [x] Add timeout protection (5000ms max per action execution)
+- [x] Verify socket communication with a node test client (`server/src/automation/__tests__/actionProtocol.test.js`, 28/28 tests passing)
 
 ### Milestone 3: Frontend Action Dispatcher & Fast-Path Intent Routing
 - [ ] Create `client/src/store/actionStore.ts` (Active action, history, execution metrics)

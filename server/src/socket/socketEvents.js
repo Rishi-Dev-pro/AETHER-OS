@@ -3,6 +3,7 @@ import { roomManager } from "./roomManager.js";
 import { visionService } from "../services/vision.service.js";
 import { validateVisionPayload } from "../utils/visionValidator.js";
 import { pythonBridge } from "../vision/pythonBridge.js";
+import { commandManager } from "../automation/commandManager.js";
 
 export const registerSocketEvents = (io, socket) => {
   logger.info(`New client connection established: ${socket.id}`);
@@ -111,6 +112,26 @@ export const registerSocketEvents = (io, socket) => {
   // Relay voice telemetry to other clients
   socket.on("voice:telemetry", (data) => {
     socket.broadcast.emit("voice:telemetry", data);
+  });
+
+  // ── Desktop Action Execution ─────────────────────────────────────────
+  /**
+   * os:action_request — Execute native Windows desktop action.
+   * Responds via socket acknowledgment callback (if provided) and emits os:action_result.
+   */
+  socket.on("os:action_request", async (payload, callback) => {
+    logger.info(`[Socket] os:action_request from ${socket.id}: ${payload?.type || "unknown"}`);
+    const result = await commandManager.handleAction(payload);
+
+    if (typeof callback === "function") {
+      try {
+        callback(result);
+      } catch (cbErr) {
+        logger.warn(`[Socket] Action callback invocation failed: ${cbErr.message}`);
+      }
+    }
+
+    socket.emit("os:action_result", result);
   });
 
   // Client disconnected
