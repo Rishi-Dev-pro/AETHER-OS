@@ -27,16 +27,16 @@ export function controlVolume(action, steps = 2) {
 
     switch (action) {
       case "up":
-        keyCode = 175; // VK_VOLUME_UP
+        keyCode = "0xAF"; // VK_VOLUME_UP
         label = "Volume increased";
         break;
       case "down":
-        keyCode = 174; // VK_VOLUME_DOWN
+        keyCode = "0xAE"; // VK_VOLUME_DOWN
         label = "Volume decreased";
         break;
       case "mute":
       case "unmute":
-        keyCode = 173; // VK_VOLUME_MUTE
+        keyCode = "0xAD"; // VK_VOLUME_MUTE
         label = action === "mute" ? "Volume muted" : "Volume unmuted";
         steps = 1; // Toggle only once
         break;
@@ -44,8 +44,20 @@ export function controlVolume(action, steps = 2) {
         return resolve({ success: false, message: `Unknown volume action: ${action}` });
     }
 
-    // PowerShell command that presses the media volume keys
-    const psScript = `$w = New-Object -ComObject WScript.Shell; for($i=0; $i -lt ${steps}; $i++){ $w.SendKeys([char]${keyCode}) }`;
+    // Kernel-level media volume key simulation via user32.dll keybd_event
+    const psScript = `
+Add-Type -TypeDefinition @"
+using System.Runtime.InteropServices;
+public class Win32AudioHelper {
+    [DllImport("user32.dll")]
+    public static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, uint dwExtraInfo);
+}
+"@
+for ($i=0; $i -lt ${steps}; $i++) {
+    [Win32AudioHelper]::keybd_event(${keyCode}, 0, 0, 0)
+    [Win32AudioHelper]::keybd_event(${keyCode}, 0, 2, 0)
+}
+`;
 
     execFile("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", psScript], (err) => {
       if (err) {

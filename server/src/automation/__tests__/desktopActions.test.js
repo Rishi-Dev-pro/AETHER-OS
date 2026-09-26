@@ -148,6 +148,25 @@ describe("Phase 10 M1: Unified Action Dispatcher", () => {
     assert.ok(res.message.includes("restricted for system stability"));
   });
 
+  it("executes open_app for an approved registry application safely", async () => {
+    let captured = null;
+    _setExecFile((file, args, opts, cb) => {
+      captured = { file, args, opts };
+      cb(null, "", "");
+    });
+
+    try {
+      const res = await executeAction("open_app", { target: "notepad" });
+      assert.equal(res.success, true);
+      assert.ok(res.message.includes("Opened Notepad"));
+      assert.ok(captured, "execFile should have been invoked");
+      assert.equal(captured.file, "powershell.exe");
+      assert.ok(captured.args.some((a) => a.includes("Start-Process -FilePath 'notepad'")));
+    } finally {
+      _setExecFile(null);
+    }
+  });
+
   it("executes close_app for an approved registry application safely", async () => {
     let captured = null;
     _setExecFile((file, args, opts, cb) => {

@@ -36,33 +36,33 @@ import {
 } from "./systemControls.js";
 
 /**
- * Spawns a background Windows process via `cmd.exe /c start` in detached mode.
- * Waits for the process to successfully spawn before resolving.
+ * Spawns a background Windows process via PowerShell `Start-Process` in the user's interactive session.
+ * Avoids cmd.exe windowHide SW_HIDE propagation and works reliably for modern WinUI/AppX and Win32 apps.
  * @param {string} target - Executable name, file, or protocol URI
  * @param {string[]} [args=[]]
  * @returns {Promise<void>}
  */
 function launchDetachedProcess(target, args = []) {
   return new Promise((resolve, reject) => {
-    try {
-      const child = spawn("cmd.exe", ["/c", "start", "", target, ...args], {
-        detached: true,
-        stdio: "ignore",
-        windowsHide: true,
-      });
+    const escapedTarget = target.replace(/'/g, "''");
+    const argsStr = args.length
+      ? ` -ArgumentList ${args.map((a) => `'${a.replace(/'/g, "''")}'`).join(", ")}`
+      : "";
+    const psScript = `Start-Process -FilePath '${escapedTarget}'${argsStr}`;
 
-      child.on("error", (err) => {
-        reject(err);
-      });
-
-      // Wait for OS spawn event before reporting success
-      child.on("spawn", () => {
-        child.unref();
-        resolve();
-      });
-    } catch (err) {
-      reject(err);
-    }
+    execFileFn(
+      "powershell.exe",
+      ["-NoProfile", "-NonInteractive", "-Command", psScript],
+      { timeout: 5000 },
+      (err, _stdout, stderr) => {
+        if (err) {
+          const detail = stderr?.trim() || err.message;
+          reject(new Error(`Failed to launch application '${target}': ${detail}`));
+        } else {
+          resolve();
+        }
+      }
+    );
   });
 }
 
@@ -79,9 +79,9 @@ function openUrlSafely(url) {
     const escapedUrl = url.replace(/'/g, "''");
     const psScript = `Start-Process -FilePath '${escapedUrl}'`;
 
-    execFile(
+    execFileFn(
       "powershell.exe",
-      ["-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-Command", psScript],
+      ["-NoProfile", "-NonInteractive", "-Command", psScript],
       { timeout: 5000 },
       (err, _stdout, stderr) => {
         if (err) {

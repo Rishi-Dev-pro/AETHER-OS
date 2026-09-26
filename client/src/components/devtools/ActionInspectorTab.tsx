@@ -141,7 +141,7 @@ export const ActionInspectorTab: React.FC = () => {
     try {
       await desktopActionDispatcher.dispatch(
         { type, params, target },
-        { speakConfirmation: false }
+        { speakConfirmation: true }
       );
     } catch {
       // Errors are already tracked in useActionStore
