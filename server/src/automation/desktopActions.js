@@ -8,7 +8,7 @@
  * and querying system telemetry.
  */
 
-import { spawn } from "child_process";
+import { execFile, spawn } from "child_process";
 import { logger } from "../utils/logger.js";
 import {
   assertSafeText,
@@ -58,34 +58,29 @@ function launchDetachedProcess(target, args = []) {
 /**
  * Opens a validated URL in the default web browser via PowerShell Start-Process.
  * Avoids cmd.exe shell interpretation of '&', '?', and '%' in URLs.
+ * Waits for PowerShell execution to complete with exit code 0 before reporting success.
  * @param {string} url
  * @returns {Promise<void>}
  */
 function openUrlSafely(url) {
   return new Promise((resolve, reject) => {
-    try {
-      const child = spawn(
-        "powershell.exe",
-        ["-NoProfile", "-NonInteractive", "-Command", "Start-Process", "-FilePath", url],
-        {
-          detached: true,
-          stdio: "ignore",
-          windowsHide: true,
+    // Single quotes inside PowerShell single-quoted string are escaped by doubling them ('')
+    const escapedUrl = url.replace(/'/g, "''");
+    const psScript = `Start-Process -FilePath '${escapedUrl}'`;
+
+    execFile(
+      "powershell.exe",
+      ["-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-Command", psScript],
+      { timeout: 5000 },
+      (err, _stdout, stderr) => {
+        if (err) {
+          const detail = stderr?.trim() || err.message;
+          reject(new Error(`Failed to open URL via PowerShell: ${detail}`));
+        } else {
+          resolve();
         }
-      );
-
-      child.on("error", (err) => {
-        reject(err);
-      });
-
-      // Wait for OS spawn event before reporting success
-      child.on("spawn", () => {
-        child.unref();
-        resolve();
-      });
-    } catch (err) {
-      reject(err);
-    }
+      }
+    );
   });
 }
 
