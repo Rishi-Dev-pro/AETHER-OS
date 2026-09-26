@@ -2,7 +2,7 @@
 
 > **Phase**: Phase 10  
 > **Status**: IN PROGRESS  
-> **Active Milestone**: Milestone 3 (Frontend Action Dispatcher & Fast-Path Intent Routing)  
+> **Active Milestone**: Milestone 4 (LLM Tool Calling & Conversational Actions)  
 > **Last Updated**: 2026-09-26  
 
 ---
@@ -17,8 +17,8 @@
 ├─────┼────────────────────────────────────────────┼─────────────┼───────────────────────┤
 │ M1  │ Windows Native Execution & Security Sandbox│ COMPLETED   │ 100%                  │
 │ M2  │ Socket.IO Action Protocol & Telemetry Bus  │ COMPLETED   │ 100%                  │
-│ M3  │ Frontend Action Dispatcher & Intent Routing│ IN PROGRESS │ 0%                    │
-│ M4  │ LLM Tool Calling & Conversational Actions  │ PENDING     │ 0%                    │
+│ M3  │ Frontend Action Dispatcher & Intent Routing│ COMPLETED   │ 100%                  │
+│ M4  │ LLM Tool Calling & Conversational Actions  │ IN PROGRESS │ 0%                    │
 │ M5  │ HUD Visual Action Feedback & DevTools Tab  │ PENDING     │ 0%                    │
 │ M6  │ End-to-End Integration & Quality Freeze    │ PENDING     │ 0%                    │
 └─────┴────────────────────────────────────────────┴─────────────┴───────────────────────┘
@@ -45,11 +45,11 @@
 - [x] Verify socket communication with a node test client (`server/src/automation/__tests__/actionProtocol.test.js`, 28/28 tests passing)
 
 ### Milestone 3: Frontend Action Dispatcher & Fast-Path Intent Routing
-- [ ] Create `client/src/store/actionStore.ts` (Active action, history, execution metrics)
-- [ ] Create `client/src/services/desktopActionDispatcher.ts` (Socket emitter & acknowledgment tracker)
-- [ ] Connect `client/src/services/intentManager.ts` to trigger `desktopActionDispatcher` for system intents
-- [ ] Connect Web Speech TTS confirmation (*"Opening Visual Studio Code"*)
-- [ ] Verify with Vitest tests for intent-to-action routing
+- [x] Create `client/src/store/actionStore.ts` (Active action, history, execution metrics)
+- [x] Create `client/src/services/desktopActionDispatcher.ts` (Socket emitter & acknowledgment tracker)
+- [x] Connect `client/src/services/intentManager.ts` to trigger `desktopActionDispatcher` for system intents
+- [x] Connect Web Speech TTS confirmation (*"Opening Visual Studio Code"*, *"Muting volume"*)
+- [x] Verify with Vitest tests for intent-to-action routing (`client/src/services/__tests__/desktopActionDispatcher.test.ts`, 8/8 tests passing)
 
 ### Milestone 4: LLM Tool Calling & Conversational Actions
 - [ ] Define desktop tools schema in `client/src/runtime/tools/desktop-tools.ts`

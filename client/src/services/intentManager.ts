@@ -3,6 +3,7 @@ import { useIntentStore } from "../store/intentStore";
 import { intentClassifier } from "./intentClassifier";
 import { entityExtractor } from "./entityExtractor";
 import { IntentTriggerPolicy } from "./intentTriggerPolicy";
+import { desktopActionDispatcher } from "./desktopActionDispatcher";
 import type { StructuredContext } from "../types/cognitive";
 import type { IntentResult } from "../types/intent";
 
@@ -75,6 +76,14 @@ class IntentManager {
 
       // Publish IntentResult
       useIntentStore.getState().setIntentResult(result);
+
+      // Fast-path execution for native desktop automation intents
+      const isVoiceFinal = context.voice ? context.voice.isFinal : true;
+      if (isVoiceFinal && !result.needsClarification && result.confidence >= 0.6) {
+        desktopActionDispatcher.dispatchFromIntent(result).catch((actionErr) => {
+          console.warn("[IntentManager] Fast-path action dispatch warning:", actionErr);
+        });
+      }
     } catch (error) {
       console.error("[IntentManager] Error processing context:", error);
       useIntentStore.getState().setClassificationStatus("error");
