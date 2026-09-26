@@ -15,8 +15,8 @@
 ├─────┬────────────────────────────────────────────┬─────────────┬───────────────────────┤
 │ ID  │ Milestone                                  │ Status      │ Completion Percentage │
 ├─────┼────────────────────────────────────────────┼─────────────┼───────────────────────┤
-│ M1  │ Windows Native Execution & Security Sandbox│ IN PROGRESS │ 0%                    │
-│ M2  │ Socket.IO Action Protocol & Telemetry Bus  │ PENDING     │ 0%                    │
+│ M1  │ Windows Native Execution & Security Sandbox│ COMPLETED   │ 100%                  │
+│ M2  │ Socket.IO Action Protocol & Telemetry Bus  │ IN PROGRESS │ 0%                    │
 │ M3  │ Frontend Action Dispatcher & Intent Routing│ PENDING     │ 0%                    │
 │ M4  │ LLM Tool Calling & Conversational Actions  │ PENDING     │ 0%                    │
 │ M5  │ HUD Visual Action Feedback & DevTools Tab  │ PENDING     │ 0%                    │
@@ -29,12 +29,12 @@
 ## 2. Milestone Task Checklists
 
 ### Milestone 1: Windows Native Execution & Security Sandbox
-- [ ] Create `server/src/automation/securityValidator.js` (Sanitize inputs, block command injection)
-- [ ] Create `server/src/automation/appRegistry.js` (Canonical names, aliases, Windows executable paths/URI schemes)
-- [ ] Create `server/src/automation/systemControls.js` (PowerShell volume scripts, screen lock, screenshot)
-- [ ] Refactor `server/src/automation/desktopActions.js` (Unified dispatcher with error handling & profiling)
-- [ ] Add standalone verification test script (`server/src/automation/__tests__/desktopActions.test.js`)
-- [ ] Verify execution of app opening, web search, volume control, and injection prevention
+- [x] Create `server/src/automation/securityValidator.js` (Sanitize inputs, block command injection)
+- [x] Create `server/src/automation/appRegistry.js` (Canonical names, aliases, Windows executable paths/URI schemes)
+- [x] Create `server/src/automation/systemControls.js` (PowerShell volume scripts, screen lock, screenshot)
+- [x] Refactor `server/src/automation/desktopActions.js` (Unified dispatcher with error handling & profiling)
+- [x] Add standalone verification test script (`server/src/automation/__tests__/desktopActions.test.js`)
+- [x] Verify execution of app opening, web search, volume control, and injection prevention (14/14 tests passing)
 
 ### Milestone 2: Socket.IO Action Protocol & Telemetry Bus
 - [ ] Define action protocol interfaces in `server/src/automation/actionProtocol.js`
@@ -79,3 +79,4 @@
 | Timestamp | Milestone | Action / Change | Verification Result |
 | :--- | :--- | :--- | :--- |
 | 2026-09-26 | Setup | Created `docs/phase_10/` roadmap, architecture spec, and progress tracker | Verified |
+| 2026-09-26 | M1 | Built `securityValidator.js`, `appRegistry.js`, `systemControls.js`, `desktopActions.js` | 14/14 tests passed (316ms) |
