@@ -1,15 +1,20 @@
 import { useAssistantStore } from "../../store/assistantStore";
 import type { LogEntry } from "../../store/assistantStore";
 import { useEffect, useRef } from "react";
+import { useActionStore } from "../../store/actionStore";
+import { CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
 
 export default function ThoughtWidget() {
   const logs = useAssistantStore((state) => state?.logs ?? []);
+  const activeAction = useActionStore((state) => state.activeAction);
+  const lastResult = useActionStore((state) => state.lastResult);
+  const isExecuting = useActionStore((state) => state.isExecuting);
   const listEndRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll logs container to bottom when new logs stream in
   useEffect(() => {
     listEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [logs]);
+  }, [logs, isExecuting, lastResult]);
 
   return (
     <div
@@ -30,13 +35,74 @@ export default function ThoughtWidget() {
       "
     >
       <div className="flex items-center justify-between mb-3 border-b border-white/[0.04] pb-2 select-none">
-        <span className="text-[9px] font-semibold uppercase tracking-[0.18em] text-slate-400 mr-2">
-          EVENT STREAMS
-        </span>
+        <div className="flex items-center gap-1.5">
+          <span className="text-[9px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+            EVENT STREAMS
+          </span>
+          {isExecuting && (
+            <span className="flex h-1.5 w-1.5 relative">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-cyan-500" />
+            </span>
+          )}
+        </div>
         <span className="text-[8px] font-mono text-slate-500 uppercase shrink-0">
           LOGS
         </span>
       </div>
+
+      {/* Live Desktop Action Indicator */}
+      {isExecuting && activeAction && (
+        <div
+          data-testid="thought-widget-active-action"
+          className="mb-2.5 p-2 rounded-xl border border-cyan-500/30 bg-cyan-950/30 text-[9px] font-mono text-cyan-300 flex items-center justify-between shadow-[0_0_15px_rgba(6,182,212,0.15)] animate-pulse"
+        >
+          <div className="flex items-center gap-1.5 min-w-0">
+            <Loader2 className="w-3 h-3 text-cyan-400 animate-spin shrink-0" />
+            <span className="font-bold uppercase tracking-wider text-cyan-200 shrink-0">
+              {activeAction.type}:
+            </span>
+            <span className="truncate text-slate-300">
+              {String(
+                activeAction.target ||
+                  activeAction.params?.app ||
+                  activeAction.params?.query ||
+                  activeAction.params?.url ||
+                  activeAction.params?.direction ||
+                  "executing..."
+              )}
+            </span>
+          </div>
+          <span className="text-[7px] font-bold px-1 py-0.5 rounded bg-cyan-400/20 text-cyan-300 uppercase shrink-0 ml-1">
+            RUN
+          </span>
+        </div>
+      )}
+
+      {/* Recently Finished Action Indicator */}
+      {!isExecuting && lastResult && (
+        <div
+          data-testid="thought-widget-last-result"
+          className={`mb-2.5 p-1.5 rounded-lg border text-[8px] font-mono flex items-center justify-between transition-all ${
+            lastResult.success
+              ? "border-emerald-500/20 bg-emerald-950/20 text-emerald-300"
+              : "border-rose-500/20 bg-rose-950/20 text-rose-300"
+          }`}
+        >
+          <div className="flex items-center gap-1 min-w-0">
+            {lastResult.success ? (
+              <CheckCircle2 className="w-2.5 h-2.5 text-emerald-400 shrink-0" />
+            ) : (
+              <AlertCircle className="w-2.5 h-2.5 text-rose-400 shrink-0" />
+            )}
+            <span className="font-bold uppercase shrink-0">{lastResult.type}:</span>
+            <span className="truncate text-slate-300">{lastResult.message}</span>
+          </div>
+          <span className="text-[7px] text-slate-400 shrink-0 ml-1 font-mono">
+            {lastResult.durationMs}ms
+          </span>
+        </div>
+      )}
 
       <div className="h-[105px] overflow-y-auto pr-1 space-y-1.5 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent min-w-0">
         {logs.slice(-4).map((log) => (

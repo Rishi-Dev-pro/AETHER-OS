@@ -12,6 +12,7 @@ import ThoughtWidget from "../widgets/ThoughtWidget";
 import ConversationWidget from "../widgets/ConversationWidget";
 import GlobalPointer from "../camera/GlobalPointer";
 import { RuntimeDevTools } from "../devtools/RuntimeDevTools";
+import { ActionNotificationPill } from "../hud/ActionNotificationPill";
 
 export default function MainLayout() {
   const [isDevToolsOpen, setIsDevToolsOpen] = useState(false);
@@ -86,6 +87,9 @@ export default function MainLayout() {
 
       {/* Global Spatial Cursor Overlay */}
       <GlobalPointer />
+
+      {/* Floating HUD Action Notification Banner */}
+      <ActionNotificationPill />
 
       {/* Runtime DevTools Dashboard Modal */}
       <RuntimeDevTools isOpen={isDevToolsOpen} onClose={() => setIsDevToolsOpen(false)} />

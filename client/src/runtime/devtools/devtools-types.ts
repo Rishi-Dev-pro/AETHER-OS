@@ -34,7 +34,8 @@ export type DevToolsTab =
   | "resilience"
   | "queue"
   | "health"
-  | "logs";
+  | "logs"
+  | "actions";
 
 /**
  * Diagnostic health check item.

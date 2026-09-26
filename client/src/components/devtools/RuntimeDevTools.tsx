@@ -29,6 +29,8 @@ import { ResilienceMonitorTab } from "./ResilienceMonitorTab";
 import { QueueInspectorTab } from "./QueueInspectorTab";
 import { HealthMonitorTab } from "./HealthMonitorTab";
 import { DebugConsoleTab } from "./DebugConsoleTab";
+import { ActionInspectorTab } from "./ActionInspectorTab";
+import { Sliders } from "lucide-react";
 
 interface Props {
   isOpen: boolean;
@@ -99,6 +101,7 @@ export const RuntimeDevTools: React.FC<Props> = ({ isOpen, onClose }) => {
     { id: "queue", label: "Queue Inspector", icon: <Layers className="w-4 h-4" /> },
     { id: "health", label: "Health Monitor", icon: <Activity className="w-4 h-4" /> },
     { id: "logs", label: "Debug Console", icon: <Terminal className="w-4 h-4" /> },
+    { id: "actions", label: "Action Inspector", icon: <Sliders className="w-4 h-4" /> },
   ];
 
   return (
@@ -201,6 +204,7 @@ export const RuntimeDevTools: React.FC<Props> = ({ isOpen, onClose }) => {
             {activeTab === "logs" && (
               <DebugConsoleTab logs={debugLogs} onClear={() => devToolsService.clearLogs()} />
             )}
+            {activeTab === "actions" && <ActionInspectorTab />}
           </main>
         </div>
       </div>
