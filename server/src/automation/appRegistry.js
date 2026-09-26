@@ -14,6 +14,7 @@ export const APPLICATION_CATALOG = {
     aliases: ["vs code", "visual studio code", "code", "editor", "vsc"],
     type: "exec",
     target: "code",
+    processNames: ["Code"],
     fallback: "cmd /c start \"\" code",
   },
   chrome: {
@@ -22,6 +23,7 @@ export const APPLICATION_CATALOG = {
     aliases: ["chrome", "google chrome", "browser", "web browser"],
     type: "exec",
     target: "chrome",
+    processNames: ["chrome"],
     fallback: "cmd /c start \"\" chrome",
   },
   spotify: {
@@ -30,6 +32,7 @@ export const APPLICATION_CATALOG = {
     aliases: ["spotify", "music", "music player"],
     type: "uri",
     target: "spotify:",
+    processNames: ["Spotify"],
   },
   notepad: {
     id: "notepad",
@@ -37,6 +40,7 @@ export const APPLICATION_CATALOG = {
     aliases: ["notepad", "notes", "text editor"],
     type: "exec",
     target: "notepad",
+    processNames: ["notepad"],
   },
   calculator: {
     id: "calculator",
@@ -44,14 +48,32 @@ export const APPLICATION_CATALOG = {
     aliases: ["calc", "calculator", "math"],
     type: "exec",
     target: "calc",
+    processNames: ["CalculatorApp", "calc"],
   },
   terminal: {
     id: "terminal",
     displayName: "Windows Terminal",
-    aliases: ["terminal", "powershell", "cmd", "command prompt", "wt", "console"],
+    aliases: ["terminal", "windows terminal", "wt", "console"],
     type: "exec",
     target: "wt",
+    processNames: ["WindowsTerminal"],
     fallbackTarget: "powershell",
+  },
+  powershell: {
+    id: "powershell",
+    displayName: "PowerShell",
+    aliases: ["powershell", "posh"],
+    type: "exec",
+    target: "powershell",
+    processNames: ["powershell", "pwsh"],
+  },
+  cmd: {
+    id: "cmd",
+    displayName: "Command Prompt",
+    aliases: ["cmd", "command prompt"],
+    type: "exec",
+    target: "cmd",
+    processNames: ["cmd"],
   },
   explorer: {
     id: "explorer",
@@ -59,6 +81,7 @@ export const APPLICATION_CATALOG = {
     aliases: ["explorer", "file explorer", "files", "my computer", "folder"],
     type: "exec",
     target: "explorer",
+    processNames: [],
   },
   settings: {
     id: "settings",
@@ -66,6 +89,7 @@ export const APPLICATION_CATALOG = {
     aliases: ["settings", "windows settings", "preferences", "control panel"],
     type: "uri",
     target: "ms-settings:",
+    processNames: ["SystemSettings"],
   },
   discord: {
     id: "discord",
@@ -73,6 +97,7 @@ export const APPLICATION_CATALOG = {
     aliases: ["discord"],
     type: "uri",
     target: "discord:",
+    processNames: ["Discord"],
   },
   slack: {
     id: "slack",
@@ -80,6 +105,7 @@ export const APPLICATION_CATALOG = {
     aliases: ["slack"],
     type: "uri",
     target: "slack:",
+    processNames: ["slack"],
   },
   paint: {
     id: "paint",
@@ -87,6 +113,7 @@ export const APPLICATION_CATALOG = {
     aliases: ["paint", "mspaint", "draw"],
     type: "exec",
     target: "mspaint",
+    processNames: ["mspaint"],
   },
   taskmanager: {
     id: "taskmanager",
@@ -94,15 +121,18 @@ export const APPLICATION_CATALOG = {
     aliases: ["task manager", "taskmgr", "activity monitor"],
     type: "exec",
     target: "taskmgr",
+    processNames: ["Taskmgr"],
   },
 };
 
 /**
  * Resolves an application identifier or user voice query to a registered entry.
  * @param {string} input - The application name or alias (e.g. "vs code", "chrome")
+ * @param {object} [options]
+ * @param {boolean} [options.exactMatchOnly=false] - Only match if input exactly equals ID or alias
  * @returns {object|null}
  */
-export function resolveApplication(input) {
+export function resolveApplication(input, options = {}) {
   if (!input || typeof input !== "string") return null;
 
   const normalized = input.toLowerCase().trim();
@@ -119,13 +149,15 @@ export function resolveApplication(input) {
     }
   }
 
-  // 3. Whole-word / phrase match (prevent arbitrary substring false positives)
-  for (const app of Object.values(APPLICATION_CATALOG)) {
-    for (const alias of app.aliases) {
-      const escapedAlias = alias.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      const wordBoundaryRegex = new RegExp(`(^|\\s)${escapedAlias}(\\s|$)`, "i");
-      if (wordBoundaryRegex.test(normalized)) {
-        return app;
+  // 3. Whole-word / phrase match (allowed only when exactMatchOnly is false)
+  if (!options.exactMatchOnly) {
+    for (const app of Object.values(APPLICATION_CATALOG)) {
+      for (const alias of app.aliases) {
+        const escapedAlias = alias.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        const wordBoundaryRegex = new RegExp(`(^|\\s)${escapedAlias}(\\s|$)`, "i");
+        if (wordBoundaryRegex.test(normalized)) {
+          return app;
+        }
       }
     }
   }

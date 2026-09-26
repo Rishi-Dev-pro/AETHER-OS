@@ -9,6 +9,17 @@
  */
 
 import { execFile, spawn } from "child_process";
+
+let execFileFn = execFile;
+
+/**
+ * Test hook to mock process execution boundary in unit tests.
+ * @param {Function|null} fn
+ */
+export const _setExecFile = (fn) => {
+  execFileFn = fn || execFile;
+};
+
 import { logger } from "../utils/logger.js";
 import {
   assertSafeText,
@@ -85,6 +96,47 @@ function openUrlSafely(url) {
 }
 
 /**
+ * Requests normal application shutdown for a registered application via PowerShell CloseMainWindow.
+ * Escalates to non-forced process stop only if MainWindowHandle is unavailable.
+ * Surfaces any termination failures to the rejection callback.
+ * @param {object} resolvedApp
+ * @returns {Promise<void>}
+ */
+function terminateApplication(resolvedApp) {
+  return new Promise((resolve, reject) => {
+    if (resolvedApp.id === "explorer") {
+      return reject(new Error("Closing File Explorer / Windows Shell is restricted for system stability"));
+    }
+
+    const processNames = resolvedApp.processNames || [resolvedApp.target];
+    if (!processNames.length) {
+      return resolve();
+    }
+
+    const namesArgs = processNames
+      .map((name) => `'${name.replace(/'/g, "''")}'`)
+      .join(", ");
+
+    // Request normal application shutdown; exclude current helper ($PID); wait on shared deadline and surface remaining running processes
+    const psScript = `$ErrorActionPreference = 'Stop'; $procs = @(Get-Process -Name ${namesArgs} -ErrorAction SilentlyContinue | Where-Object { $_.Id -ne $PID }); if ($procs.Count -gt 0) { $toWait = @(); foreach ($p in $procs) { if ($p.MainWindowHandle -ne 0) { $closed = $p.CloseMainWindow(); if ($closed) { $toWait += $p; } else { Stop-Process -Id $p.Id -ErrorAction Stop; } } else { Stop-Process -Id $p.Id -ErrorAction Stop; } } if ($toWait.Count -gt 0) { $deadline = [DateTime]::UtcNow.AddMilliseconds(3000); foreach ($p in $toWait) { $remaining = [int]($deadline - [DateTime]::UtcNow).TotalMilliseconds; if ($remaining -gt 0) { $null = $p.WaitForExit($remaining); } } $failed = @($toWait | Where-Object { -not $_.HasExited }); if ($failed.Count -gt 0) { $failedIds = ($failed | ForEach-Object { $_.Id }) -join ', '; throw "Process(es) $failedIds failed to exit within timeout"; } } }`;
+
+    execFileFn(
+      "powershell.exe",
+      ["-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-Command", psScript],
+      { timeout: 5000 },
+      (err, _stdout, stderr) => {
+        if (err) {
+          const detail = stderr?.trim() || err.message;
+          logger.error(`[DesktopAutomation] Close application failed for ${resolvedApp.id}: ${detail}`);
+          return reject(new Error(`Failed to close ${resolvedApp.displayName}: ${detail}`));
+        }
+        resolve();
+      }
+    );
+  });
+}
+
+/**
  * Main dispatcher executing requested desktop action with validation and profiling.
  *
  * @param {string} actionType - One of: open_app, close_app, search_web, open_url, adjust_volume, mute_volume, lock_workstation, take_screenshot, get_system_info
@@ -121,6 +173,40 @@ export const executeAction = async (actionType, params = {}) => {
           durationMs,
           data: { app: resolved.displayName, target: resolved.target },
         };
+      }
+
+      // ── 1b. Application Closer (Registry Only) ───────────────────────
+      case "close_app": {
+        const rawTarget = params.target || params.app || "";
+        const sanitized = assertSafeText(rawTarget, "Application name");
+        const resolved = resolveApplication(sanitized, { exactMatchOnly: true });
+
+        if (!resolved) {
+          const durationMs = Date.now() - startTime;
+          return {
+            success: false,
+            message: `Application '${sanitized}' is not in the approved application registry`,
+            durationMs,
+          };
+        }
+
+        try {
+          await terminateApplication(resolved);
+          const durationMs = Date.now() - startTime;
+          return {
+            success: true,
+            message: `Closed ${resolved.displayName}`,
+            durationMs,
+            data: { app: resolved.displayName, target: resolved.target },
+          };
+        } catch (termErr) {
+          const durationMs = Date.now() - startTime;
+          return {
+            success: false,
+            message: termErr.message,
+            durationMs,
+          };
+        }
       }
 
       // ── 2. Web Search ────────────────────────────────────────────────

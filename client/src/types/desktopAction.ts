@@ -18,7 +18,9 @@ export type DesktopActionType =
   | "lock_workstation"
   | "lock_screen"
   | "take_screenshot"
-  | "get_system_info";
+  | "get_system_info"
+  | "click_target"
+  | "type_text";
 
 export type DesktopActionSource = "intent" | "llm_tool" | "manual_ui" | "unknown";
 
@@ -26,7 +28,7 @@ export interface DesktopActionRequest {
   actionId: string;
   type: DesktopActionType;
   target?: string;
-  params?: Record<string, any>;
+  params?: Record<string, unknown>;
   source: DesktopActionSource;
   timestamp: number;
 }
@@ -38,7 +40,7 @@ export interface DesktopActionResult {
   message: string;
   durationMs: number;
   timestamp: number;
-  data?: Record<string, any>;
+  data?: Record<string, unknown>;
   error?: string;
 }
 

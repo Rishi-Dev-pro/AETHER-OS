@@ -24,7 +24,11 @@ interface ActionState {
 
   startAction: (request: DesktopActionRequest) => void;
   finishAction: (result: DesktopActionResult) => void;
-  failAction: (actionId: string, error: string) => void;
+  failAction: (
+    actionId: string,
+    error: string,
+    actionType?: import("../types/desktopAction").DesktopActionType
+  ) => void;
   clearHistory: () => void;
 }
 
@@ -46,6 +50,13 @@ export const useActionStore = create<ActionState>((set) => ({
 
   finishAction: (result) =>
     set((state) => {
+      const existingEntry = state.history.find(
+        (entry) => entry.request.actionId === result.actionId
+      );
+      if (existingEntry && existingEntry.status !== "pending") {
+        return state;
+      }
+
       const updatedHistory = state.history.map((entry) =>
         entry.request.actionId === result.actionId
           ? {
@@ -60,35 +71,57 @@ export const useActionStore = create<ActionState>((set) => ({
         activeAction:
           state.activeAction?.actionId === result.actionId ? null : state.activeAction,
         lastResult: result,
-        isExecuting: false,
+        isExecuting:
+          state.activeAction?.actionId === result.actionId ? false : state.isExecuting,
         history: updatedHistory,
       };
     }),
 
-  failAction: (actionId, error) =>
+  failAction: (actionId, error, actionType) =>
     set((state) => {
-      const updatedHistory = state.history.map((entry) =>
-        entry.request.actionId === actionId
-          ? {
-              ...entry,
-              result: {
-                actionId,
-                type: entry.request.type,
-                success: false,
-                message: error,
-                durationMs: Date.now() - entry.request.timestamp,
-                timestamp: Date.now(),
-                error,
-              },
-              status: "failed" as const,
-            }
-          : entry
-      );
+      let failResult: DesktopActionResult | undefined;
+      const updatedHistory = state.history.map((entry) => {
+        if (entry.request.actionId === actionId) {
+          failResult = {
+            actionId,
+            type: entry.request.type,
+            success: false,
+            message: error,
+            durationMs: Date.now() - entry.request.timestamp,
+            timestamp: Date.now(),
+            error,
+          };
+          return {
+            ...entry,
+            result: failResult,
+            status: "failed" as const,
+          };
+        }
+        return entry;
+      });
+
+      if (!failResult) {
+        failResult = {
+          actionId,
+          type:
+            actionType ||
+            (state.activeAction?.actionId === actionId
+              ? state.activeAction.type
+              : "get_system_info"),
+          success: false,
+          message: error,
+          durationMs: 0,
+          timestamp: Date.now(),
+          error,
+        };
+      }
 
       return {
         activeAction:
           state.activeAction?.actionId === actionId ? null : state.activeAction,
-        isExecuting: false,
+        lastResult: failResult,
+        isExecuting:
+          state.activeAction?.actionId === actionId ? false : state.isExecuting,
         history: updatedHistory,
       };
     }),

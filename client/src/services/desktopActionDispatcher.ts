@@ -30,9 +30,10 @@ class DesktopActionDispatcher {
     {
       resolve: (result: DesktopActionResult) => void;
       reject: (error: Error) => void;
-      timer: any;
+      timer: ReturnType<typeof setTimeout>;
     }
   >();
+  private handledActionIds = new Set<string>();
   private listenersBound = false;
 
   constructor() {
@@ -62,7 +63,7 @@ class DesktopActionDispatcher {
     partialRequest: {
       type: DesktopActionType;
       target?: string;
-      params?: Record<string, any>;
+      params?: Record<string, unknown>;
       source?: "intent" | "llm_tool" | "manual_ui";
       actionId?: string;
       timestamp?: number;
@@ -99,7 +100,7 @@ class DesktopActionDispatcher {
       const timer = setTimeout(() => {
         this.pendingRequests.delete(actionId);
         const timeoutError = `Action '${request.type}' timed out after ${timeoutMs}ms`;
-        useActionStore.getState().failAction(actionId, timeoutError);
+        useActionStore.getState().failAction(actionId, timeoutError, request.type);
         resolve({
           actionId,
           type: request.type,
@@ -120,11 +121,12 @@ class DesktopActionDispatcher {
             this.handleActionResult(ackResult);
           }
         });
-      } catch (err: any) {
+      } catch (err: unknown) {
         clearTimeout(timer);
         this.pendingRequests.delete(actionId);
-        const errorMsg = err?.message || "Socket dispatch failed";
-        useActionStore.getState().failAction(actionId, errorMsg);
+        const errorMsg =
+          err instanceof Error ? err.message : "Socket dispatch failed";
+        useActionStore.getState().failAction(actionId, errorMsg, request.type);
         resolve({
           actionId,
           type: request.type,
@@ -139,6 +141,21 @@ class DesktopActionDispatcher {
   }
 
   /**
+   * Records completed action ID in bounded FIFO cache to prevent duplicate processing.
+   */
+  private markActionHandled(actionId: string) {
+    if (this.handledActionIds.has(actionId)) {
+      this.handledActionIds.delete(actionId);
+    } else if (this.handledActionIds.size >= 200) {
+      const oldestId = this.handledActionIds.values().next().value;
+      if (oldestId) {
+        this.handledActionIds.delete(oldestId);
+      }
+    }
+    this.handledActionIds.add(actionId);
+  }
+
+  /**
    * Internal handler for action results from ack callback or socket event.
    */
   private handleActionResult(result: DesktopActionResult) {
@@ -148,11 +165,19 @@ class DesktopActionDispatcher {
     if (pending) {
       clearTimeout(pending.timer);
       this.pendingRequests.delete(result.actionId);
+      this.markActionHandled(result.actionId);
       useActionStore.getState().finishAction(result);
       pending.resolve(result);
-    } else {
-      useActionStore.getState().finishAction(result);
+      return;
     }
+
+    // Skip redundant processing if already finished via ack callback
+    if (this.handledActionIds.has(result.actionId)) {
+      return;
+    }
+
+    this.markActionHandled(result.actionId);
+    useActionStore.getState().finishAction(result);
   }
 
   /**
@@ -182,7 +207,10 @@ class DesktopActionDispatcher {
       }
 
       case "CLOSE": {
-        const target = String(parameters.application || "").trim();
+        const target = String(
+          parameters.application || parameters.raw || ""
+        ).trim();
+        if (!target) return null;
         return this.dispatch(
           {
             type: "close_app",
@@ -248,10 +276,11 @@ class DesktopActionDispatcher {
 
       case "SET_VOLUME": {
         const level = Number(parameters.number ?? 50);
+        const direction = level > 50 ? "up" : "down";
         return this.dispatch(
           {
             type: "adjust_volume",
-            params: { level },
+            params: { level, direction },
             source: "intent",
           },
           { speakConfirmation: true }
@@ -317,11 +346,15 @@ class DesktopActionDispatcher {
           }
           break;
         case "adjust_volume":
-          speak(
-            request.params?.direction === "down"
-              ? "Lowering volume"
-              : "Increasing volume"
-          );
+          if (request.params?.direction === "down") {
+            speak("Lowering volume");
+          } else if (request.params?.direction === "up") {
+            speak("Increasing volume");
+          } else if (request.params?.level !== undefined) {
+            speak(`Setting volume to ${request.params.level} percent`);
+          } else {
+            speak("Adjusting volume");
+          }
           break;
         case "mute_volume":
           speak("Muting volume");

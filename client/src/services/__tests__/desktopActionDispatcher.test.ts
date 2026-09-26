@@ -23,7 +23,7 @@ vi.mock("../socket", () => ({
 // Mock speech synthesis
 const mockSpeak = vi.fn();
 vi.mock("../../runtime/frontend/speech-runtime", () => ({
-  speak: (...args: any[]) => mockSpeak(...args),
+  speak: (...args: unknown[]) => mockSpeak(...args),
 }));
 
 import { desktopActionDispatcher } from "../desktopActionDispatcher";
@@ -100,6 +100,76 @@ describe("Milestone 3: useActionStore State Management", () => {
     expect(updated.isExecuting).toBe(false);
     expect(updated.history[0].status).toBe("failed");
     expect(updated.history[0].result?.error).toBe("Connection lost");
+    expect(updated.lastResult?.error).toBe("Connection lost");
+    expect(updated.lastResult?.success).toBe(false);
+  });
+
+  it("should preserve passed actionType on failAction when request is not in history", () => {
+    const store = useActionStore.getState();
+    store.failAction("evicted_act_999", "Timed out in background", "take_screenshot");
+
+    const updated = useActionStore.getState();
+    expect(updated.lastResult?.actionId).toBe("evicted_act_999");
+    expect(updated.lastResult?.type).toBe("take_screenshot");
+    expect(updated.lastResult?.error).toBe("Timed out in background");
+  });
+
+  it("should ignore late results for already completed entries independently of lastResult", () => {
+    const store = useActionStore.getState();
+    // 1. Start and finish Action A
+    store.startAction({
+      actionId: "act_A",
+      type: "open_app",
+      target: "notepad",
+      source: "intent",
+      timestamp: Date.now(),
+    });
+    const resultA: DesktopActionResult = {
+      actionId: "act_A",
+      type: "open_app",
+      success: true,
+      message: "Opened Notepad",
+      durationMs: 50,
+      timestamp: Date.now(),
+    };
+    store.finishAction(resultA);
+
+    // 2. Start and finish Action B (so lastResult is now Action B)
+    store.startAction({
+      actionId: "act_B",
+      type: "get_system_info",
+      source: "manual_ui",
+      timestamp: Date.now(),
+    });
+    const resultB: DesktopActionResult = {
+      actionId: "act_B",
+      type: "get_system_info",
+      success: true,
+      message: "Telemetry collected",
+      durationMs: 10,
+      timestamp: Date.now(),
+    };
+    store.finishAction(resultB);
+    expect(useActionStore.getState().lastResult?.actionId).toBe("act_B");
+
+    // 3. Late arriving result for Action A should be ignored
+    const lateResultA: DesktopActionResult = {
+      actionId: "act_A",
+      type: "open_app",
+      success: false,
+      message: "Duplicate late failure",
+      durationMs: 120,
+      timestamp: Date.now(),
+    };
+    store.finishAction(lateResultA);
+
+    const stateAfterLate = useActionStore.getState();
+    // lastResult must remain Action B
+    expect(stateAfterLate.lastResult?.actionId).toBe("act_B");
+    // Action A in history must remain its original completed result
+    const entryA = stateAfterLate.history.find((e) => e.request.actionId === "act_A");
+    expect(entryA?.status).toBe("success");
+    expect(entryA?.result?.message).toBe("Opened Notepad");
   });
 });
 
@@ -249,6 +319,72 @@ describe("Milestone 3: DesktopActionDispatcher Socket IPC & Fast-Path Routing", 
     const lockRes = await desktopActionDispatcher.dispatchFromIntent(lockIntent);
     expect(lockRes?.type).toBe("lock_workstation");
     expect(mockSpeak).toHaveBeenCalledWith("Locking screen");
+  });
+
+  it("should handle SET_VOLUME intent matching server relative adjustment", async () => {
+    mockSocketEmit.mockImplementation((_event, payload, ackCb) => {
+      if (typeof ackCb === "function") {
+        ackCb({
+          actionId: payload.actionId,
+          type: payload.type,
+          success: true,
+          message: "Volume adjusted",
+          durationMs: 15,
+          timestamp: Date.now(),
+        });
+      }
+    });
+
+    // Level <= 50 triggers relative "down" adjustment
+    const setVolDownIntent: IntentResult = {
+      intentId: "int_setvol_down",
+      timestamp: Date.now(),
+      category: "CONTROL",
+      domain: "SYSTEM",
+      intent: "SET_VOLUME",
+      confidence: 0.9,
+      entities: [],
+      parameters: { number: 40 },
+      needsClarification: false,
+    };
+
+    const resDown = await desktopActionDispatcher.dispatchFromIntent(setVolDownIntent);
+    expect(resDown?.type).toBe("adjust_volume");
+    expect(mockSpeak).toHaveBeenCalledWith("Lowering volume");
+
+    // Level > 50 triggers relative "up" adjustment
+    const setVolUpIntent: IntentResult = {
+      intentId: "int_setvol_up",
+      timestamp: Date.now(),
+      category: "CONTROL",
+      domain: "SYSTEM",
+      intent: "SET_VOLUME",
+      confidence: 0.9,
+      entities: [],
+      parameters: { number: 80 },
+      needsClarification: false,
+    };
+
+    const resUp = await desktopActionDispatcher.dispatchFromIntent(setVolUpIntent);
+    expect(resUp?.type).toBe("adjust_volume");
+    expect(mockSpeak).toHaveBeenCalledWith("Increasing volume");
+  });
+
+  it("should return null for CLOSE intent if target application is empty", async () => {
+    const emptyCloseIntent: IntentResult = {
+      intentId: "int_empty_close",
+      timestamp: Date.now(),
+      category: "INTERACTION",
+      domain: "APPLICATION",
+      intent: "CLOSE",
+      confidence: 0.8,
+      entities: [],
+      parameters: {},
+      needsClarification: false,
+    };
+
+    const result = await desktopActionDispatcher.dispatchFromIntent(emptyCloseIntent);
+    expect(result).toBeNull();
   });
 
   it("should return null for non-desktop intents like GREET", async () => {

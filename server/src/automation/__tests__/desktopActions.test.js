@@ -15,7 +15,7 @@ import {
 } from "../securityValidator.js";
 import { resolveApplication, getRegisteredApplicationsList } from "../appRegistry.js";
 import { getSystemInfo } from "../systemControls.js";
-import { executeAction } from "../desktopActions.js";
+import { executeAction, _setExecFile } from "../desktopActions.js";
 
 describe("Phase 10 M1: Security Validator", () => {
   it("allows safe text and trims whitespace", () => {
@@ -132,6 +132,76 @@ describe("Phase 10 M1: Unified Action Dispatcher", () => {
 
   it("rejects applications not in the approved registry", async () => {
     const res = await executeAction("open_app", { target: "unapproved_custom_script" });
+    assert.equal(res.success, false);
+    assert.ok(res.message.includes("not in the approved application registry"));
+  });
+
+  it("rejects applications not in the approved registry for close_app", async () => {
+    const res = await executeAction("close_app", { target: "unapproved_custom_script" });
+    assert.equal(res.success, false);
+    assert.ok(res.message.includes("not in the approved application registry"));
+  });
+
+  it("restricts closing explorer / Windows shell for system stability", async () => {
+    const res = await executeAction("close_app", { target: "explorer" });
+    assert.equal(res.success, false);
+    assert.ok(res.message.includes("restricted for system stability"));
+  });
+
+  it("executes close_app for an approved registry application safely", async () => {
+    let captured = null;
+    _setExecFile((file, args, opts, cb) => {
+      captured = { file, args, opts };
+      cb(null, "", "");
+    });
+
+    try {
+      const res = await executeAction("close_app", { target: "notepad" });
+      assert.equal(res.success, true);
+      assert.ok(res.message.includes("Closed Notepad"));
+      assert.ok(captured, "execFile should have been invoked");
+      assert.equal(captured.file, "powershell.exe");
+      assert.ok(captured.args[5].includes("CloseMainWindow"));
+      assert.ok(captured.args[5].includes("notepad"));
+      assert.ok(captured.args[5].includes("$PID"));
+      assert.ok(captured.args[5].includes("WaitForExit"));
+    } finally {
+      _setExecFile(null);
+    }
+  });
+
+  it("surfaces termination errors from PowerShell as failure", async () => {
+    _setExecFile((_file, _args, _opts, cb) => {
+      const err = new Error("Access Denied");
+      cb(err, "", "Access is denied");
+    });
+
+    try {
+      const res = await executeAction("close_app", { target: "notepad" });
+      assert.equal(res.success, false);
+      assert.ok(res.message.includes("Access is denied") || res.message.includes("Access Denied"));
+    } finally {
+      _setExecFile(null);
+    }
+  });
+
+  it("surfaces process timeout failure when process remains running after close request", async () => {
+    _setExecFile((_file, _args, _opts, cb) => {
+      const err = new Error("Command failed");
+      cb(err, "", "Process 1234 failed to exit within timeout");
+    });
+
+    try {
+      const res = await executeAction("close_app", { target: "notepad" });
+      assert.equal(res.success, false);
+      assert.ok(res.message.includes("failed to exit within timeout"));
+    } finally {
+      _setExecFile(null);
+    }
+  });
+
+  it("rejects close_app when application name is embedded within a longer phrase", async () => {
+    const res = await executeAction("close_app", { target: "close notepad please" });
     assert.equal(res.success, false);
     assert.ok(res.message.includes("not in the approved application registry"));
   });

@@ -174,9 +174,9 @@ class EntityExtractor {
       }
     }
 
-    // 9. Extract General Text query (as fallback for QUERY, OPEN, SEARCH, FILESYSTEM, etc. intents)
+    // 9. Extract General Text query (as fallback for QUERY, OPEN, CLOSE, SEARCH, FILESYSTEM, etc. intents)
     const textIntents = [
-      "QUERY", "OPEN", "SEARCH", "FIND_FILES", "CREATE_DIR",
+      "QUERY", "OPEN", "CLOSE", "SEARCH", "FIND_FILES", "CREATE_DIR",
       "DELETE_FILE", "RENAME_FILE", "MOVE_FILE", "COPY_FILE",
       "TYPE_TEXT", "PRESS_KEY"
     ];
@@ -184,7 +184,7 @@ class EntityExtractor {
       const hasAppOrUrl = entities.some(e => e.type === "application" || e.type === "url");
       if (!hasAppOrUrl) {
         // Strip out the start action prefix keywords
-        const cleanText = text.replace(/^(?:open|launch|start|what\s+is|explain|how\s+do\s+i|tell\s+me\s+about|search\s+for|search|lookup|look\s+up|find|locate|where\s+is|show|create|make|delete|remove|erase|destroy|rename|move|copy|type|press)\s+/i, "").trim();
+        const cleanText = text.replace(/^(?:open|launch|start|close|quit|kill|exit|stop|what\s+is|explain|how\s+do\s+i|tell\s+me\s+about|search\s+for|search|lookup|look\s+up|find|locate|where\s+is|show|create|make|delete|remove|erase|destroy|rename|move|copy|type|press)\s+/i, "").trim();
         if (cleanText.length > 0) {
           entities.push({
             type: "text",
